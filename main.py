@@ -98,20 +98,6 @@ def receive_order(
     POS 系統在訂單成立後 POST 到此端點。
     系統會篩選：訂單狀態已成立 + 消費金額 ≥ 1000。
     """
-    # 篩選條件 1：訂單狀態
-    if payload.order_status.lower() not in VALID_STATUSES:
-        return schemas.WebhookResponse(
-            status="ignored",
-            message=f"Order status '{payload.order_status}' is not a valid completed status",
-        )
-
-    # 篩選條件 2：消費金額
-    if payload.amount < settings.MIN_ORDER_AMOUNT:
-        return schemas.WebhookResponse(
-            status="ignored",
-            message=f"Amount {payload.amount} is below minimum {settings.MIN_ORDER_AMOUNT}",
-        )
-
     # 防重複：訂單編號已存在則跳過
     existing = db.query(models.Order).filter(models.Order.order_id == payload.order_id).first()
     if existing:
