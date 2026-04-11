@@ -1,3 +1,6 @@
+import base64
+import csv
+import io
 import requests
 from datetime import date
 from config import settings
@@ -57,6 +60,18 @@ def build_email_html(orders: list, report_date: date, fields: list = None) -> st
     """
 
 
+def build_csv_base64(orders: list, fields: list) -> str:
+    buf = io.StringIO()
+    # BOM for Excel compatibility
+    buf.write('\ufeff')
+    writer = csv.writer(buf)
+    writer.writerow([FIELD_LABELS.get(f, f) for f in fields])
+    for o in orders:
+        writer.writerow([get_field_value(o, f) for f in fields])
+    content = buf.getvalue().encode("utf-8-sig")
+    return base64.b64encode(content).decode("ascii")
+
+
 def send_daily_report(orders: list, report_date: date, fields: list = None):
     recipients = settings.get_recipients()
     if not recipients:
@@ -70,6 +85,9 @@ def send_daily_report(orders: list, report_date: date, fields: list = None):
     html_content = build_email_html(orders, report_date, fields)
     subject = f"{report_date.strftime('%Y/%m/%d')}，每日點數儲值名單 — 共 {len(orders)} 筆"
 
+    csv_b64 = build_csv_base64(orders, fields or DEFAULT_FIELDS)
+    filename = f"名留集團_點數儲值名單_{report_date.strftime('%Y%m%d')}.csv"
+
     try:
         resp = requests.post(
             "https://api.zeabur.com/api/v1/zsend/emails",
@@ -82,6 +100,13 @@ def send_daily_report(orders: list, report_date: date, fields: list = None):
                 "to": recipients,
                 "subject": subject,
                 "html": html_content,
+                "attachments": [
+                    {
+                        "filename": filename,
+                        "content": csv_b64,
+                        "content_type": "text/csv",
+                    }
+                ],
             },
             timeout=15,
         )
