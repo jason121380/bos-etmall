@@ -3,9 +3,13 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import base64 as _b64
+import struct
+import zlib
+
 from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 import models
@@ -181,6 +185,89 @@ NOTION_DOCS_CSS = """
   #swagger-ui { max-width: 1100px !important; margin: 0 auto !important; padding: 0 24px 48px !important; }
 </style>
 """
+
+
+def _make_solid_png(w: int, h: int, r: int, g: int, b: int) -> bytes:
+    row = bytes([0]) + bytes([r, g, b] * w)
+    raw = row * h
+    compressed = zlib.compress(raw)
+    def chunk(name, data):
+        buf = name + data
+        return struct.pack('>I', len(data)) + buf + struct.pack('>I', zlib.crc32(buf) & 0xFFFFFFFF)
+    ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
+    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr) + chunk(b'IDAT', compressed) + chunk(b'IEND', b'')
+
+
+@app.get("/manifest.json", include_in_schema=False)
+def pwa_manifest():
+    return JSONResponse({
+        "name": "BOS-ETMALL 訂單後台",
+        "short_name": "BOS-ETMALL",
+        "description": "名留集團 ML Group 訂單管理後台",
+        "start_url": "/dashboard",
+        "display": "standalone",
+        "background_color": "#ffffff",
+        "theme_color": "#533afd",
+        "orientation": "portrait-primary",
+        "icons": [
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        ],
+    })
+
+
+@app.get("/icon-192.png", include_in_schema=False)
+def icon_192():
+    png = _make_solid_png(192, 192, 0x53, 0x3a, 0xfd)
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/icon-512.png", include_in_schema=False)
+def icon_512():
+    png = _make_solid_png(512, 512, 0x53, 0x3a, 0xfd)
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    sw_code = """
+const CACHE = 'bos-etmall-v1';
+const PRECACHE = ['/dashboard', '/manifest.json', '/icon-192.png'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ).then(() => self.clients.claim()));
+});
+
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  // API calls: network first
+  if (url.pathname.startsWith('/admin') || url.pathname.startsWith('/orders') || url.pathname === '/health') {
+    e.respondWith(fetch(e.request).catch(() => new Response('{}', {headers:{'Content-Type':'application/json'}})));
+    return;
+  }
+  // Static: stale-while-revalidate
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      const fresh = fetch(e.request).then(r => {
+        caches.open(CACHE).then(c => c.put(e.request, r.clone()));
+        return r;
+      });
+      return cached || fresh;
+    })
+  );
+});
+"""
+    return Response(content=sw_code, media_type="application/javascript",
+                    headers={"Service-Worker-Allowed": "/"})
 
 
 @app.get("/docs", include_in_schema=False)

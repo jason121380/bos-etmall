@@ -2,7 +2,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#533afd">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="BOS-ETMALL">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>BOS-ETMALL 訂單後台</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
@@ -225,21 +231,75 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .health-time { font-size: 13px; color: #64748d; }
   .health-url { font-family: monospace; font-size: 12px; color: #533afd; margin-top: 16px; display: block; }
 
-  @media (max-width: 900px) {
-    .sidebar { width: 60px; }
-    .logo-text, .logo-sub, .nav-label, .nav-item span, .status-info { display: none; }
-    .sidebar-logo { justify-content: center; padding: 16px; }
-    .nav-item { justify-content: center; }
-    .sidebar-footer { padding: 12px; }
-    .main { margin-left: 60px; }
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  /* ── Bottom Nav (mobile only) ── */
+  .bottom-nav {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #ffffff; border-top: 1px solid #e5edf5;
+    z-index: 300;
+    padding-bottom: env(safe-area-inset-bottom);
   }
+  .bottom-nav-inner {
+    display: flex; justify-content: space-around; align-items: stretch;
+    height: 56px;
+  }
+  .bottom-tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 3px;
+    font-size: 10px; color: #64748d; cursor: pointer;
+    transition: color 0.15s; text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    padding: 4px 0;
+  }
+  .bottom-tab.active { color: #533afd; }
+  .bottom-tab svg { width: 20px; height: 20px; }
+
+  /* ── Sidebar overlay (mobile) ── */
+  .sidebar-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.3); z-index: 190;
+  }
+  .sidebar-overlay.open { display: block; }
+
+  /* ── Table scroll ── */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  @media (max-width: 768px) {
+    body { flex-direction: column; }
+    .sidebar { transform: translateX(-100%); transition: transform 0.25s; width: 220px; }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; }
+    .topbar { padding: 0 16px; }
+    .hamburger {
+      display: flex !important; align-items: center; justify-content: center;
+      width: 36px; height: 36px; cursor: pointer; border: none;
+      background: transparent; color: #273951; flex-shrink: 0;
+    }
+    .content { padding: 16px; padding-bottom: 80px; }
+    .settings-view, .health-view { padding: 16px; padding-bottom: 80px; }
+    .settings-card { max-width: 100%; padding: 20px 16px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-value { font-size: 22px; }
+    .bottom-nav { display: block; }
+    #fieldCheckboxes { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 400px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-card { padding: 14px 12px; }
+    #fieldCheckboxes { grid-template-columns: 1fr 1fr; }
+  }
+
+  .hamburger { display: none; }
 </style>
 </head>
 <body>
 
+<!-- Sidebar overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
 <!-- Sidebar -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <div class="logo-mark">
       <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
@@ -309,7 +369,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <!-- Main content -->
 <div class="main">
   <div class="topbar">
-    <span class="topbar-title" id="pageTitle">監控儀表板</span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="選單">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="pageTitle">監控儀表板</span>
+    </div>
     <div class="topbar-right">
       <span class="last-update" id="lastUpdate"></span>
       <button class="refresh-btn" onclick="loadData()">重新整理</button>
@@ -345,17 +412,19 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="panel-header">
         <span class="panel-title">最新訂單</span>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>訂單編號</th><th>店家</th><th>消費者</th>
-            <th>手機</th><th>金額</th><th>狀態</th><th>訂單時間</th><th>Sheet</th>
-          </tr>
-        </thead>
-        <tbody id="ordersBody">
-          <tr><td colspan="8" class="empty">載入中...</td></tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>訂單編號</th><th>店家</th><th>消費者</th>
+              <th>手機</th><th>金額</th><th>狀態</th><th>訂單時間</th><th>Sheet</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody">
+            <tr><td colspan="8" class="empty">載入中...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div class="panel">
@@ -498,17 +567,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 const fmt = n => new Intl.NumberFormat('zh-TW').format(n);
 const fmtDate = s => s ? new Date(s).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
 
-function showView(view) {
+function showView(view, evt) {
+  if (evt !== undefined && evt !== null) closeSidebar();
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById('dashboardView').style.display = view === 'dashboard' ? 'block' : 'none';
   document.getElementById('healthView').style.display = view === 'health' ? 'block' : 'none';
   document.getElementById('settingsView').style.display = view === 'settings' ? 'block' : 'none';
-
-  event.currentTarget.classList.add('active');
-
+  if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+  else if (typeof event !== 'undefined' && event && event.currentTarget) event.currentTarget.classList.add('active');
   const titles = { dashboard: '監控儀表板', health: '健康檢查', settings: '設定' };
   document.getElementById('pageTitle').textContent = titles[view] || view;
-
   if (view === 'health') loadHealth();
   if (view === 'settings') { loadSettings(); loadEmailLogs(); }
 }
@@ -705,6 +773,62 @@ async function loadData() {
 
 loadData();
 setInterval(loadData, 30000);
+
+// ── Sidebar mobile toggle ──
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ── Bottom nav ──
+function showTab(view, el) {
+  closeSidebar();
+  document.querySelectorAll('.bottom-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  showView(view, null);
+}
+
+// ── Service Worker ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 </script>
+
+<!-- Bottom navigation bar -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <div class="bottom-tab active" onclick="showTab('dashboard', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+      </svg>
+      儀表板
+    </div>
+    <div class="bottom-tab" onclick="showTab('health', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      健康
+    </div>
+    <div class="bottom-tab" onclick="showTab('settings', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      設定
+    </div>
+    <a class="bottom-tab" href="/docs" target="_blank">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      文件
+    </a>
+  </div>
+</nav>
 </body>
 </html>"""
