@@ -5,40 +5,59 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+FIELD_LABELS = {
+    "order_id":       "訂單編號",
+    "store_name":     "店家名稱",
+    "store_id":       "店家編號",
+    "consumer_name":  "消費者姓名",
+    "consumer_phone": "消費者手機",
+    "amount":         "消費金額",
+    "order_status":   "訂單狀態",
+    "order_time":     "訂單時間",
+    "received_at":    "接收時間",
+}
 
-def build_email_html(orders: list, report_date: date) -> str:
+DEFAULT_FIELDS = ["order_id", "store_name", "consumer_name", "consumer_phone", "amount", "order_status", "order_time"]
+
+
+def get_field_value(order, field: str) -> str:
+    if field == "amount":
+        return f"NT$ {order.amount:,.0f}"
+    if field == "order_time" and order.order_time:
+        return order.order_time.strftime("%Y-%m-%d %H:%M")
+    if field == "received_at" and order.received_at:
+        return order.received_at.strftime("%Y-%m-%d %H:%M")
+    if field == "store_name":
+        return order.store_name or order.store_id or ""
+    return str(getattr(order, field, "") or "")
+
+
+def build_email_html(orders: list, report_date: date, fields: list = None) -> str:
+    if not fields:
+        fields = DEFAULT_FIELDS
+
+    headers = "".join(f"<th>{FIELD_LABELS.get(f, f)}</th>" for f in fields)
     rows = ""
     for o in orders:
-        rows += f"""
-        <tr>
-            <td>{o.order_id}</td>
-            <td>{o.store_name or o.store_id}</td>
-            <td>{o.consumer_phone}</td>
-            <td>{o.consumer_name or '-'}</td>
-            <td>NT$ {o.amount:,.0f}</td>
-            <td>{o.order_time.strftime('%Y-%m-%d %H:%M')}</td>
-        </tr>"""
+        cells = "".join(f"<td>{get_field_value(o, f)}</td>" for f in fields)
+        rows += f"<tr>{cells}</tr>"
 
     return f"""
-    <html><body>
-    <h2>每日消費名單報表 — {report_date.strftime('%Y/%m/%d')}</h2>
-    <p>以下為昨日新增訂單：</p>
-    <p>共 <strong>{len(orders)}</strong> 筆</p>
-    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
-        <thead style="background:#4a90e2;color:white;">
-            <tr>
-                <th>訂單編號</th><th>店家</th><th>手機</th><th>姓名</th>
-                <th>金額</th><th>訂單時間</th>
-            </tr>
+    <html><body style="font-family:sans-serif;">
+    <h2 style="color:#061b31;">每日消費名單報表 — {report_date.strftime('%Y/%m/%d')}</h2>
+    <p style="color:#64748d;">共 <strong>{len(orders)}</strong> 筆訂單</p>
+    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;margin-top:12px;">
+        <thead style="background:#533afd;color:white;">
+            <tr>{headers}</tr>
         </thead>
         <tbody>{rows}</tbody>
     </table>
-    <br><p style="color:gray;font-size:12px;">此郵件由系統自動發送</p>
+    <br><p style="color:#94a3b8;font-size:12px;">此郵件由 BOS-ETMALL 系統自動發送</p>
     </body></html>
     """
 
 
-def send_daily_report(orders: list, report_date: date):
+def send_daily_report(orders: list, report_date: date, fields: list = None):
     recipients = settings.get_recipients()
     if not recipients:
         logger.warning("No email recipients configured")
@@ -48,7 +67,7 @@ def send_daily_report(orders: list, report_date: date):
         logger.info(f"No new orders for {report_date}, skipping email")
         return
 
-    html_content = build_email_html(orders, report_date)
+    html_content = build_email_html(orders, report_date, fields)
     subject = f"每日消費名單 {report_date.strftime('%Y/%m/%d')} — 共 {len(orders)} 筆"
 
     try:

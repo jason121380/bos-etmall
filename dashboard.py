@@ -374,6 +374,39 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="panel-title" style="font-size:15px;margin-bottom:6px;">Email 報表設定</div>
       <p style="font-size:13px;color:#64748d;margin-bottom:24px;">每天早上 09:00 自動發送前一天訂單報表給以下收件人。</p>
 
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px;font-weight:500;color:#273951;display:block;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Email 報表欄位（可多選）</label>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="fieldCheckboxes">
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="order_id" style="accent-color:#533afd;"> 訂單編號
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="store_name" style="accent-color:#533afd;"> 店家名稱
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="store_id" style="accent-color:#533afd;"> 店家編號
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="consumer_name" style="accent-color:#533afd;"> 消費者姓名
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="consumer_phone" style="accent-color:#533afd;"> 消費者手機
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="amount" style="accent-color:#533afd;"> 消費金額
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="order_status" style="accent-color:#533afd;"> 訂單狀態
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="order_time" style="accent-color:#533afd;"> 訂單時間
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#273951;cursor:pointer;padding:8px 10px;border:1px solid #e5edf5;border-radius:4px;">
+            <input type="checkbox" value="received_at" style="accent-color:#533afd;"> 接收時間
+          </label>
+        </div>
+      </div>
+
       <div style="margin-bottom:16px;">
         <label style="font-size:12px;font-weight:500;color:#273951;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">收件人（每行一個 Email）</label>
         <textarea id="recipientsInput"
@@ -432,22 +465,35 @@ function showView(view) {
   if (view === 'settings') loadSettings();
 }
 
+const DEFAULT_FIELDS = 'order_id,store_name,consumer_name,consumer_phone,amount,order_status,order_time';
+
 async function loadSettings() {
   try {
     const s = await fetch('/admin/settings').then(r => r.json());
     const recipients = (s.email_recipients || '').split(',').map(e => e.trim()).filter(Boolean).join('\\n');
     document.getElementById('recipientsInput').value = recipients;
+
+    const fields = (s.email_fields || DEFAULT_FIELDS).split(',');
+    document.querySelectorAll('#fieldCheckboxes input[type=checkbox]').forEach(cb => {
+      cb.checked = fields.includes(cb.value);
+    });
   } catch(e) {}
 }
 
 async function saveSettings() {
   const raw = document.getElementById('recipientsInput').value;
   const recipients = raw.split('\\n').map(e => e.trim()).filter(Boolean).join(',');
+
+  const fields = [...document.querySelectorAll('#fieldCheckboxes input[type=checkbox]:checked')]
+    .map(cb => cb.value).join(',');
+
+  if (!fields) { alert('請至少選擇一個欄位'); return; }
+
   try {
     await fetch('/admin/settings', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ email_recipients: recipients })
+      body: JSON.stringify({ email_recipients: recipients, email_fields: fields })
     });
     const msg = document.getElementById('settingsMsg');
     msg.style.display = 'inline';

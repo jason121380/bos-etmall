@@ -46,7 +46,10 @@ def run_daily_email():
         if recipients_row and recipients_row.value:
             settings.EMAIL_RECIPIENTS = recipients_row.value
 
-        send_daily_report(new_orders, yesterday)
+        fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
+        fields = fields_row.value.split(",") if fields_row and fields_row.value else None
+
+        send_daily_report(new_orders, yesterday, fields)
 
         for o in new_orders:
             o.emailed = True
@@ -210,7 +213,10 @@ def send_today_report(db: Session = Depends(get_db)):
     if recipients_row and recipients_row.value:
         settings.EMAIL_RECIPIENTS = recipients_row.value
 
-    send_daily_report(orders, today)
+    fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
+    fields = fields_row.value.split(",") if fields_row and fields_row.value else None
+
+    send_daily_report(orders, today, fields)
     return {"status": "ok", "message": f"Today report sent: {len(orders)} orders"}
 
 
