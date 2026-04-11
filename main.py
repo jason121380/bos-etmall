@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import Depends, FastAPI, HTTPException, Header
+from fastapi import Depends, FastAPI, HTTPException, Header, Request
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -80,10 +81,36 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="POS Webhook Backend",
-    description="接收 POS 訂單、篩選符合條件名單、同步 Google Sheet + 每日 Email",
+    title="BOS-ETMALL 訂單管理系統",
+    description="""
+## 系統說明
+
+BOS-ETMALL 後端 API，負責接收 POS 訂單、同步 Google Sheets，並每日自動發送 Email 報表。
+
+### 主要功能
+- **Webhook 接收**：POS 系統下單後即時推送，自動寫入資料庫
+- **Google Sheets 同步**：每筆訂單即時寫入試算表
+- **每日 Email 報表**：每天 09:00（台北時間）自動發送前一日名單，含 CSV 附件
+- **後台管理**：可視化儀表板，支援收件人、報表欄位設定，及手動發送
+
+### 訂單篩選條件
+- 訂單狀態：`completed` / `paid` / `confirmed` / `success` / `done`
+- 消費金額：≥ NT$1,000
+
+### 相關連結
+- [後台儀表板](/dashboard)
+- [GitHub](https://github.com/jason121380/bos-etmall)
+""",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_tags=[
+        {"name": "Webhook", "description": "POS 訂單推送接口"},
+        {"name": "訂單查詢", "description": "查詢已儲存的訂單資料"},
+        {"name": "後台管理", "description": "Email、報表、設定管理"},
+        {"name": "系統", "description": "健康檢查、儀表板"},
+    ],
 )
 
 
@@ -93,25 +120,102 @@ def verify_secret(x_webhook_secret: str = Header(default="")):
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+NOTION_DOCS_CSS = """
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+  body { font-family: 'Inter', -apple-system, sans-serif !important; background: #ffffff !important; }
+  .swagger-ui { font-family: 'Inter', -apple-system, sans-serif !important; }
+  .swagger-ui .topbar { background: #ffffff !important; border-bottom: 1px solid #e9e9e7 !important; padding: 12px 24px !important; }
+  .swagger-ui .topbar .download-url-wrapper { display: none !important; }
+  .swagger-ui .topbar-wrapper { display: flex; align-items: center; gap: 12px; }
+  .swagger-ui .topbar-wrapper .link { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .swagger-ui .topbar-wrapper .link img { display: none; }
+  .swagger-ui .topbar-wrapper .link::before {
+    content: 'BOS-ETMALL'; font-size: 15px; font-weight: 600; color: #1a1a1a; letter-spacing: -0.3px;
+  }
+  .swagger-ui .info { margin: 32px 0 24px !important; padding: 0 !important; }
+  .swagger-ui .info .title { font-size: 24px !important; font-weight: 700 !important; color: #1a1a1a !important; letter-spacing: -0.5px !important; }
+  .swagger-ui .info .description { color: #6b6b6b !important; font-size: 14px !important; line-height: 1.7 !important; }
+  .swagger-ui .info .description h2 { font-size: 16px !important; font-weight: 600 !important; color: #1a1a1a !important; margin: 16px 0 8px !important; }
+  .swagger-ui .info .description ul { padding-left: 20px !important; }
+  .swagger-ui .info .description code { background: #f7f6f3 !important; padding: 1px 6px !important; border-radius: 4px !important; font-size: 12px !important; color: #eb5757 !important; }
+  .swagger-ui .info .description a { color: #2383e2 !important; }
+  .swagger-ui .scheme-container { background: #ffffff !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
+  .swagger-ui .opblock-tag { font-size: 14px !important; font-weight: 600 !important; color: #1a1a1a !important; border-bottom: 1px solid #e9e9e7 !important; padding: 12px 0 !important; }
+  .swagger-ui .opblock-tag:hover { background: #f7f6f3 !important; }
+  .swagger-ui .opblock { border: 1px solid #e9e9e7 !important; border-radius: 6px !important; margin: 6px 0 !important; box-shadow: none !important; }
+  .swagger-ui .opblock.opblock-post { border-color: #e9e9e7 !important; background: #ffffff !important; }
+  .swagger-ui .opblock.opblock-get { border-color: #e9e9e7 !important; background: #ffffff !important; }
+  .swagger-ui .opblock .opblock-summary { padding: 10px 14px !important; }
+  .swagger-ui .opblock .opblock-summary-method { border-radius: 4px !important; font-size: 11px !important; font-weight: 600 !important; min-width: 60px !important; padding: 4px 8px !important; }
+  .swagger-ui .opblock.opblock-post .opblock-summary-method { background: #0f7b0f !important; }
+  .swagger-ui .opblock.opblock-get .opblock-summary-method { background: #2383e2 !important; }
+  .swagger-ui .opblock .opblock-summary-path { font-size: 13px !important; font-weight: 500 !important; color: #1a1a1a !important; font-family: 'SF Mono', 'Fira Code', monospace !important; }
+  .swagger-ui .opblock .opblock-summary-description { color: #6b6b6b !important; font-size: 13px !important; }
+  .swagger-ui .opblock-body { border-top: 1px solid #e9e9e7 !important; }
+  .swagger-ui .opblock-description-wrapper p, .swagger-ui .opblock-description-wrapper li { color: #4a4a4a !important; font-size: 13px !important; line-height: 1.6 !important; }
+  .swagger-ui .opblock-description-wrapper code { background: #f7f6f3 !important; padding: 1px 5px !important; border-radius: 3px !important; font-size: 12px !important; color: #eb5757 !important; }
+  .swagger-ui .btn { border-radius: 5px !important; font-size: 13px !important; font-weight: 500 !important; }
+  .swagger-ui .btn.execute { background: #1a1a1a !important; border-color: #1a1a1a !important; }
+  .swagger-ui .btn.execute:hover { background: #333 !important; }
+  .swagger-ui table thead tr th { font-size: 12px !important; font-weight: 600 !important; color: #6b6b6b !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
+  .swagger-ui .response-col_status { font-weight: 600 !important; }
+  .swagger-ui .model-box { background: #f7f6f3 !important; border-radius: 6px !important; }
+  .swagger-ui section.models { border: 1px solid #e9e9e7 !important; border-radius: 6px !important; }
+  .swagger-ui section.models h4 { font-size: 14px !important; color: #1a1a1a !important; }
+  #swagger-ui { max-width: 1100px !important; margin: 0 auto !important; padding: 0 24px 48px !important; }
+</style>
+"""
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    base = get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="BOS-ETMALL API 文件",
+        swagger_ui_parameters={"defaultModelsExpandDepth": -1, "docExpansion": "list"},
+        swagger_css_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css",
+        swagger_js_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_favicon_url="",
+    )
+    html = base.body.decode("utf-8").replace("</head>", NOTION_DOCS_CSS + "</head>")
+    return HTMLResponse(html)
+
+
+@app.get("/dashboard", response_class=HTMLResponse, tags=["系統"], summary="後台管理儀表板")
 def monitoring_dashboard():
+    """開啟視覺化後台，可查看訂單統計、設定 Email 收件人與報表欄位、手動發送報表。"""
     return DASHBOARD_HTML
 
 
-@app.get("/health")
+@app.get("/health", tags=["系統"], summary="健康檢查")
 def health():
+    """回傳 API 服務狀態與伺服器時間，用於確認服務是否正常運作。"""
     return {"status": "ok", "time": datetime.now().isoformat()}
 
 
-@app.post("/webhook/order", response_model=schemas.WebhookResponse)
+@app.post(
+    "/webhook/order",
+    response_model=schemas.WebhookResponse,
+    tags=["Webhook"],
+    summary="接收 POS 訂單",
+)
 def receive_order(
     payload: schemas.OrderWebhook,
     db: Session = Depends(get_db),
     _: None = Depends(verify_secret),
 ):
     """
-    POS 系統在訂單成立後 POST 到此端點。
-    系統會篩選：訂單狀態已成立 + 消費金額 ≥ 1000。
+    POS 系統下單後呼叫此端點，將訂單寫入資料庫並同步 Google Sheets。
+
+    **自動篩選條件：**
+    - 訂單狀態：`completed` / `paid` / `confirmed` / `success` / `done`
+    - 消費金額：≥ NT$1,000
+
+    **防重複機制：** 相同 `order_id` 只會寫入一次。
+
+    **Header（可選）：**
+    - `x-webhook-secret`：若後台有設定 `WEBHOOK_SECRET`，需帶入此 Header 驗證
     """
     # 防重複：訂單編號已存在則跳過
     existing = db.query(models.Order).filter(models.Order.order_id == payload.order_id).first()
@@ -153,30 +257,53 @@ def receive_order(
     )
 
 
-@app.get("/orders", response_model=list[schemas.OrderOut])
+@app.get("/orders", response_model=list[schemas.OrderOut], tags=["訂單查詢"], summary="查詢訂單列表")
 def list_orders(
     skip: int = 0,
     limit: int = 100,
     store_id: str = None,
     db: Session = Depends(get_db),
 ):
-    """查詢已儲存的符合條件訂單"""
+    """
+    查詢已儲存的訂單，支援分頁與店家篩選。
+
+    **參數說明：**
+    - `skip`：跳過前幾筆（預設 0）
+    - `limit`：最多回傳幾筆（預設 100）
+    - `store_id`：依店家編號篩選（選填）
+    """
     query = db.query(models.Order)
     if store_id:
         query = query.filter(models.Order.store_id == store_id)
     return query.order_by(models.Order.received_at.desc()).offset(skip).limit(limit).all()
 
 
-@app.get("/admin/settings")
+@app.get("/admin/settings", tags=["後台管理"], summary="取得後台設定")
 def get_settings(db: Session = Depends(get_db)):
-    """取得後台設定"""
+    """
+    取得所有後台設定，以 key-value 格式回傳。
+
+    **常用 key：**
+    - `email_recipients`：收件人清單（逗號分隔）
+    - `email_fields`：報表欄位（逗號分隔）
+    """
     rows = db.query(models.Setting).all()
     return {r.key: r.value for r in rows}
 
 
-@app.post("/admin/settings")
+@app.post("/admin/settings", tags=["後台管理"], summary="更新後台設定")
 def update_settings(data: dict, db: Session = Depends(get_db)):
-    """更新後台設定"""
+    """
+    更新後台設定，傳入 JSON 物件，key 為設定名稱，value 為設定值。
+
+    **範例：**
+    ```json
+    {
+      "email_recipients": "a@example.com,b@example.com",
+      "email_fields": "store_name,consumer_phone,order_time"
+    }
+    ```
+    """
     for key, value in data.items():
         row = db.query(models.Setting).filter(models.Setting.key == key).first()
         if row:
@@ -187,16 +314,20 @@ def update_settings(data: dict, db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 
-@app.post("/admin/send-report-now")
+@app.post("/admin/send-report-now", tags=["後台管理"], summary="手動發送昨日報表")
 def trigger_report_now(db: Session = Depends(get_db)):
-    """手動觸發昨日 Email 報表"""
+    """
+    手動觸發昨日 Email 報表（與排程邏輯相同）。
+
+    只會發送「昨日」尚未標記 `emailed=True` 的訂單，發送後會更新 `emailed` 旗標。
+    """
     run_daily_email()
     return {"status": "ok", "message": "Report triggered"}
 
 
-@app.post("/admin/send-today-report")
+@app.post("/admin/send-today-report", tags=["後台管理"], summary="立即發送今日報表")
 def send_today_report(db: Session = Depends(get_db)):
-    """立即發送今日正式報表"""
+    """立即發送今日（當天）所有訂單的正式報表，含 CSV 附件。"""
     today = date.today()
     start = datetime.combine(today, datetime.min.time())
     end = datetime.combine(today + timedelta(days=1), datetime.min.time())
@@ -220,9 +351,19 @@ def send_today_report(db: Session = Depends(get_db)):
     return {"status": "ok", "message": f"Today report sent: {len(orders)} orders"}
 
 
-@app.post("/admin/send-date-report")
+@app.post("/admin/send-date-report", tags=["後台管理"], summary="發送指定日期區間報表")
 def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_db)):
-    """發送指定日期區間的報表"""
+    """
+    發送指定日期區間的訂單報表。
+
+    **參數（Query String）：**
+    - `start_date`：開始日期，格式 `YYYY-MM-DD`
+    - `end_date`：結束日期，格式 `YYYY-MM-DD`（可與 start_date 相同，表示單日）
+
+    **範例：**
+    - 單日：`/admin/send-date-report?start_date=2026-04-10&end_date=2026-04-10`
+    - 區間：`/admin/send-date-report?start_date=2026-04-01&end_date=2026-04-10`
+    """
     from datetime import date as date_type
     try:
         start = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -281,9 +422,13 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
     return {"status": "ok", "message": f"報表已發送：{label}，共 {len(orders)} 筆"}
 
 
-@app.post("/admin/test-email")
+@app.post("/admin/test-email", tags=["後台管理"], summary="發送測試信")
 def test_email(db: Session = Depends(get_db)):
-    """發送測試信（使用今日所有訂單）"""
+    """
+    發送測試信，內容為最新 5 筆訂單（不論日期）。
+
+    用於確認 Email 設定正確、收件人能收到信。不會更新 `emailed` 旗標。
+    """
     import requests as req
     recipients_row = db.query(models.Setting).filter(models.Setting.key == "email_recipients").first()
     recipients_str = (recipients_row.value if recipients_row and recipients_row.value else settings.EMAIL_RECIPIENTS)
