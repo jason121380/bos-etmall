@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pathlib import Path
 
+STATIC_DIR = Path(__file__).parent / "static"
+
 from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -194,9 +196,6 @@ NOTION_DOCS_CSS = """
   #swagger-ui { max-width: 1100px !important; margin: 0 auto !important; padding: 0 24px 48px !important; }
 </style>
 """
-
-
-STATIC_DIR = Path(__file__).parent / "static"
 
 
 @app.get("/manifest.json", include_in_schema=False)
