@@ -21,7 +21,8 @@ class Settings(BaseSettings):
 
     @property
     def email_enabled(self) -> bool:
-        return bool(self.ZEABUR_EMAIL_API_KEY and self.EMAIL_FROM and self.EMAIL_RECIPIENTS)
+        # 只要有 API Key 和發件人就啟用排程（收件人可從後台 DB 設定）
+        return bool(self.ZEABUR_EMAIL_API_KEY and self.EMAIL_FROM)
 
     # Filtering
     MIN_ORDER_AMOUNT: int = 1000
