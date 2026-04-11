@@ -29,7 +29,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     position: fixed;
     top: 0; left: 0;
     z-index: 200;
-    box-shadow: rgba(50,50,93,0.08) 2px 0 12px;
+    box-shadow: none;
   }
 
   .sidebar-logo {
@@ -119,7 +119,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     padding: 0 28px;
     height: 52px;
     display: flex; align-items: center; justify-content: space-between;
-    box-shadow: rgba(0,55,112,0.06) 0px 2px 8px;
+    
   }
   .topbar-title { font-size: 14px; font-weight: 500; color: #061b31; letter-spacing: -0.2px; }
   .topbar-right { display: flex; align-items: center; gap: 16px; }
@@ -147,11 +147,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     border: 1px solid #e5edf5;
     border-radius: 6px;
     padding: 18px 20px;
-    box-shadow: rgba(50,50,93,0.12) 0px 4px 10px -4px, rgba(0,0,0,0.05) 0px 2px 6px -2px;
-    transition: box-shadow 0.2s;
-  }
-  .stat-card:hover {
-    box-shadow: rgba(50,50,93,0.22) 0px 10px 22px -10px, rgba(0,0,0,0.08) 0px 6px 12px -6px;
   }
   .stat-label { font-size: 11px; font-weight: 500; color: #64748d; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
   .stat-value { font-size: 28px; font-weight: 300; color: #061b31; letter-spacing: -0.8px; font-variant-numeric: tabular-nums; line-height: 1; margin-bottom: 5px; }
@@ -165,7 +160,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     border: 1px solid #e5edf5;
     border-radius: 6px;
     margin-bottom: 20px;
-    box-shadow: rgba(50,50,93,0.12) 0px 4px 10px -4px, rgba(0,0,0,0.05) 0px 2px 6px -2px;
     overflow: hidden;
   }
   .panel-header {
@@ -215,7 +209,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     background: #f8fafc; border: 1px solid #e5edf5; border-radius: 5px;
     padding: 12px 14px; text-align: center; transition: all 0.15s;
   }
-  .store-card:hover { background: #fff; box-shadow: rgba(50,50,93,0.12) 0px 4px 12px -4px; }
+  .store-card:hover { background: #fff; }
   .store-name { font-size: 12px; color: #64748d; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .store-count { font-size: 20px; font-weight: 300; color: #533afd; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
   .store-amount { font-size: 11px; color: #64748d; margin-top: 2px; }
@@ -225,7 +219,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .health-card {
     background: #fff; border: 1px solid #e5edf5; border-radius: 6px;
     padding: 28px;
-    box-shadow: rgba(50,50,93,0.12) 0px 4px 10px -4px;
     max-width: 480px;
   }
   .health-status { font-size: 36px; font-weight: 300; color: #108c3d; margin-bottom: 8px; }
