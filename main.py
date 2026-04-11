@@ -186,6 +186,40 @@ def update_settings(data: dict, db: Session = Depends(get_db)):
 
 @app.post("/admin/send-report-now")
 def trigger_report_now(db: Session = Depends(get_db)):
-    """手動觸發今日 Email 報表（測試用）"""
+    """手動觸發昨日 Email 報表"""
     run_daily_email()
     return {"status": "ok", "message": "Report triggered"}
+
+
+@app.post("/admin/test-email")
+def test_email(db: Session = Depends(get_db)):
+    """發送測試信（使用今日所有訂單）"""
+    import requests as req
+    recipients_row = db.query(models.Setting).filter(models.Setting.key == "email_recipients").first()
+    recipients_str = (recipients_row.value if recipients_row and recipients_row.value else settings.EMAIL_RECIPIENTS)
+    recipients = [e.strip() for e in recipients_str.split(",") if e.strip()]
+    if not recipients:
+        raise HTTPException(status_code=400, detail="No recipients configured")
+    if not settings.ZEABUR_EMAIL_API_KEY:
+        raise HTTPException(status_code=400, detail="ZEABUR_EMAIL_API_KEY not set")
+
+    orders = db.query(models.Order).order_by(models.Order.received_at.desc()).limit(5).all()
+    rows = "".join(
+        f"<tr><td>{o.order_id}</td><td>{o.store_name or o.store_id}</td>"
+        f"<td>{o.consumer_phone}</td><td>NT$ {o.amount:,.0f}</td></tr>"
+        for o in orders
+    )
+    html = f"""<h2>BOS-ETMALL Email 測試信</h2>
+    <p>這是系統測試信，最新 {len(orders)} 筆訂單：</p>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+    <tr><th>訂單編號</th><th>店家</th><th>手機</th><th>金額</th></tr>
+    {rows}
+    </table>"""
+
+    resp = req.post(
+        "https://api.zeabur.com/api/v1/zsend/emails",
+        headers={"Authorization": f"Bearer {settings.ZEABUR_EMAIL_API_KEY}", "Content-Type": "application/json"},
+        json={"from": settings.EMAIL_FROM, "to": recipients, "subject": "BOS-ETMALL 測試信", "html": html},
+        timeout=15,
+    )
+    return {"status": "ok", "zeabur_response": resp.json(), "recipients": recipients}

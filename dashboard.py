@@ -452,10 +452,12 @@ async function saveSettings() {
 }
 
 async function sendTestReport() {
-  if (!confirm('確定要立即發送測試報表？')) return;
+  if (!confirm('確定要發送測試信？')) return;
   try {
-    await fetch('/admin/send-report-now', { method: 'POST' });
-    alert('報表已發送！');
+    const r = await fetch('/admin/test-email', { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) alert('測試信已發送！收件人：' + (d.recipients || []).join(', '));
+    else alert('發送失敗：' + (d.detail || JSON.stringify(d)));
   } catch(e) { alert('發送失敗'); }
 }
 
