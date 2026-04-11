@@ -214,12 +214,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .store-count { font-size: 20px; font-weight: 300; color: #533afd; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
   .store-amount { font-size: 11px; color: #64748d; margin-top: 2px; }
 
-  /* Health view */
-  .health-view { padding: 28px; display: none; }
-  .health-card {
+  /* Settings & Health view */
+  .settings-view, .health-view { padding: 28px; display: none; }
+  .settings-card, .health-card {
     background: #fff; border: 1px solid #e5edf5; border-radius: 6px;
     padding: 28px;
-    max-width: 480px;
+    max-width: 560px;
   }
   .health-status { font-size: 36px; font-weight: 300; color: #108c3d; margin-bottom: 8px; }
   .health-time { font-size: 13px; color: #64748d; }
@@ -269,6 +269,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           </svg>
         </span>
         <span>健康檢查</span>
+      </a>
+      <a class="nav-item" onclick="showView('settings')">
+        <span class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </span>
+        <span>設定</span>
       </a>
     </div>
     <div class="nav-section">
@@ -359,6 +368,36 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Settings view -->
+  <div id="settingsView" class="settings-view">
+    <div class="settings-card">
+      <div class="panel-title" style="font-size:15px;margin-bottom:6px;">Email 報表設定</div>
+      <p style="font-size:13px;color:#64748d;margin-bottom:24px;">每天早上 09:00 自動發送前一天訂單報表給以下收件人。</p>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;font-weight:500;color:#273951;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">收件人（每行一個 Email）</label>
+        <textarea id="recipientsInput"
+          style="width:100%;height:120px;border:1px solid #e5edf5;border-radius:4px;padding:10px 12px;font-family:inherit;font-size:13px;color:#061b31;resize:vertical;outline:none;line-height:1.6;"
+          placeholder="jason@example.com&#10;partner@example.com"
+          onfocus="this.style.borderColor='#533afd'"
+          onblur="this.style.borderColor='#e5edf5'"></textarea>
+        <div style="font-size:11px;color:#64748d;margin-top:5px;">每行輸入一個 Email，儲存後立即生效</div>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button onclick="saveSettings()"
+          style="background:#533afd;color:#fff;border:none;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;">
+          儲存設定
+        </button>
+        <button onclick="sendTestReport()"
+          style="background:transparent;color:#533afd;border:1px solid #b9b9f9;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
+          立即發送測試報表
+        </button>
+        <span id="settingsMsg" style="font-size:12px;color:#108c3d;display:none;">已儲存</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Health view -->
   <div id="healthView" class="health-view">
     <div class="health-card">
@@ -378,15 +417,46 @@ function showView(view) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById('dashboardView').style.display = view === 'dashboard' ? 'block' : 'none';
   document.getElementById('healthView').style.display = view === 'health' ? 'block' : 'none';
+  document.getElementById('settingsView').style.display = view === 'settings' ? 'block' : 'none';
 
-  if (view === 'dashboard') {
-    event.currentTarget.classList.add('active');
-    document.getElementById('pageTitle').textContent = '監控儀表板';
-  } else if (view === 'health') {
-    event.currentTarget.classList.add('active');
-    document.getElementById('pageTitle').textContent = '健康檢查';
-    loadHealth();
-  }
+  event.currentTarget.classList.add('active');
+
+  const titles = { dashboard: '監控儀表板', health: '健康檢查', settings: '設定' };
+  document.getElementById('pageTitle').textContent = titles[view] || view;
+
+  if (view === 'health') loadHealth();
+  if (view === 'settings') loadSettings();
+}
+
+async function loadSettings() {
+  try {
+    const s = await fetch('/admin/settings').then(r => r.json());
+    const recipients = (s.email_recipients || '').split(',').map(e => e.trim()).filter(Boolean).join('\\n');
+    document.getElementById('recipientsInput').value = recipients;
+  } catch(e) {}
+}
+
+async function saveSettings() {
+  const raw = document.getElementById('recipientsInput').value;
+  const recipients = raw.split('\\n').map(e => e.trim()).filter(Boolean).join(',');
+  try {
+    await fetch('/admin/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ email_recipients: recipients })
+    });
+    const msg = document.getElementById('settingsMsg');
+    msg.style.display = 'inline';
+    setTimeout(() => msg.style.display = 'none', 2500);
+  } catch(e) { alert('儲存失敗'); }
+}
+
+async function sendTestReport() {
+  if (!confirm('確定要立即發送測試報表？')) return;
+  try {
+    await fetch('/admin/send-report-now', { method: 'POST' });
+    alert('報表已發送！');
+  } catch(e) { alert('發送失敗'); }
 }
 
 async function loadHealth() {

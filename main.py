@@ -41,6 +41,11 @@ def run_daily_email():
             .all()
         )
 
+        # 優先讀 DB 設定的收件人，fallback 到環境變數
+        recipients_row = db.query(models.Setting).filter(models.Setting.key == "email_recipients").first()
+        if recipients_row and recipients_row.value:
+            settings.EMAIL_RECIPIENTS = recipients_row.value
+
         send_daily_report(new_orders, yesterday)
 
         for o in new_orders:
@@ -159,8 +164,28 @@ def list_orders(
     return query.order_by(models.Order.received_at.desc()).offset(skip).limit(limit).all()
 
 
+@app.get("/admin/settings")
+def get_settings(db: Session = Depends(get_db)):
+    """取得後台設定"""
+    rows = db.query(models.Setting).all()
+    return {r.key: r.value for r in rows}
+
+
+@app.post("/admin/settings")
+def update_settings(data: dict, db: Session = Depends(get_db)):
+    """更新後台設定"""
+    for key, value in data.items():
+        row = db.query(models.Setting).filter(models.Setting.key == key).first()
+        if row:
+            row.value = value
+        else:
+            db.add(models.Setting(key=key, value=value))
+    db.commit()
+    return {"status": "ok"}
+
+
 @app.post("/admin/send-report-now")
-def trigger_report_now():
+def trigger_report_now(db: Session = Depends(get_db)):
     """手動觸發今日 Email 報表（測試用）"""
     run_daily_email()
     return {"status": "ok", "message": "Report triggered"}

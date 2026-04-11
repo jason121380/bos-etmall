@@ -1,5 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, func
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, func
 from database import Base
+
+
+class Setting(Base):
+    __tablename__ = "settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=True)
 
 
 class Order(Base):
