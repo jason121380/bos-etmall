@@ -86,7 +86,7 @@ def send_daily_report(orders: list, report_date: date, fields: list = None):
     subject = f"{report_date.strftime('%Y/%m/%d')}，每日點數儲值名單 — 共 {len(orders)} 筆"
 
     csv_b64 = build_csv_base64(orders, fields or DEFAULT_FIELDS)
-    filename = f"名留集團_點數儲值名單_{report_date.strftime('%Y%m%d')}.csv"
+    filename = f"名留集團 ML Group_點數儲值名單_{report_date.strftime('%Y%m%d')}.csv"
 
     try:
         resp = requests.post(
@@ -96,7 +96,7 @@ def send_daily_report(orders: list, report_date: date, fields: list = None):
                 "Authorization": f"Bearer {settings.ZEABUR_EMAIL_API_KEY}",
             },
             json={
-                "from": f"名留集團 <{settings.EMAIL_FROM}>",
+                "from": f"名留集團 ML Group <{settings.EMAIL_FROM}>",
                 "to": recipients,
                 "subject": subject,
                 "html": html_content,

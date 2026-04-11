@@ -404,13 +404,13 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
     html_content = build_email_html(orders, report_date, fields)
     subject = f"{label}，點數儲值名單 — 共 {len(orders)} 筆"
     csv_b64 = build_csv_base64(orders, fields or ["store_name", "consumer_phone", "order_time"])
-    filename = f"名留集團_點數儲值名單_{start_date}_{end_date}.csv"
+    filename = f"名留集團 ML Group_點數儲值名單_{start_date}_{end_date}.csv"
 
     resp = req.post(
         "https://api.zeabur.com/api/v1/zsend/emails",
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {cfg.ZEABUR_EMAIL_API_KEY}"},
         json={
-            "from": f"名留集團 <{cfg.EMAIL_FROM}>",
+            "from": f"名留集團 ML Group <{cfg.EMAIL_FROM}>",
             "to": recipients,
             "subject": subject,
             "html": html_content,
@@ -454,7 +454,7 @@ def test_email(db: Session = Depends(get_db)):
     resp = req.post(
         "https://api.zeabur.com/api/v1/zsend/emails",
         headers={"Authorization": f"Bearer {settings.ZEABUR_EMAIL_API_KEY}", "Content-Type": "application/json"},
-        json={"from": f"名留集團 <{settings.EMAIL_FROM}>", "to": recipients, "subject": "名留集團 — Email 測試信", "html": html},
+        json={"from": f"名留集團 ML Group <{settings.EMAIL_FROM}>", "to": recipients, "subject": "名留集團 ML Group — Email 測試信", "html": html},
         timeout=15,
     )
     return {"status": "ok", "zeabur_response": resp.json(), "recipients": recipients}
