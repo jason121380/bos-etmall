@@ -3,13 +3,12 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import base64 as _b64
-import struct
-import zlib
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 import models
@@ -133,6 +132,16 @@ BOS-ETMALL 後端 API，負責接收 POS 訂單、同步 Google Sheets，並每�
 )
 
 
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    data = (STATIC_DIR / "favicon.ico").read_bytes()
+    return Response(content=data, media_type="image/x-icon",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 def verify_secret(x_webhook_secret: str = Header(default="")):
     """可選：驗證 POS 傳來的 Secret Header"""
     if settings.WEBHOOK_SECRET and x_webhook_secret != settings.WEBHOOK_SECRET:
@@ -187,15 +196,7 @@ NOTION_DOCS_CSS = """
 """
 
 
-def _make_solid_png(w: int, h: int, r: int, g: int, b: int) -> bytes:
-    row = bytes([0]) + bytes([r, g, b] * w)
-    raw = row * h
-    compressed = zlib.compress(raw)
-    def chunk(name, data):
-        buf = name + data
-        return struct.pack('>I', len(data)) + buf + struct.pack('>I', zlib.crc32(buf) & 0xFFFFFFFF)
-    ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
-    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr) + chunk(b'IDAT', compressed) + chunk(b'IEND', b'')
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 @app.get("/manifest.json", include_in_schema=False)
@@ -210,23 +211,23 @@ def pwa_manifest():
         "theme_color": "#533afd",
         "orientation": "portrait-primary",
         "icons": [
-            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
         ],
     })
 
 
 @app.get("/icon-192.png", include_in_schema=False)
 def icon_192():
-    png = _make_solid_png(192, 192, 0x53, 0x3a, 0xfd)
-    return Response(content=png, media_type="image/png",
+    data = (STATIC_DIR / "icon-192.png").read_bytes()
+    return Response(content=data, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/icon-512.png", include_in_schema=False)
 def icon_512():
-    png = _make_solid_png(512, 512, 0x53, 0x3a, 0xfd)
-    return Response(content=png, media_type="image/png",
+    data = (STATIC_DIR / "icon-512.png").read_bytes()
+    return Response(content=data, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
