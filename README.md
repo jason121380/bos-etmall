@@ -19,7 +19,7 @@ FastAPI 後端 (Zeabur)
   │
   ├── PostgreSQL 資料庫（寫入訂單）
   ├── Google Sheets（即時同步）
-  └── Gmail（每天 09:00 寄報表）
+  └── Zeabur Email（每天 09:00 寄報表）
 ```
 
 ---
@@ -31,8 +31,23 @@ FastAPI 後端 (Zeabur)
 | `POST` | `/webhook/order` | 接收 POS 訂單（主要接口） |
 | `GET` | `/orders` | 查詢所有訂單 |
 | `GET` | `/health` | 健康檢查 |
-| `POST` | `/admin/send-report-now` | 手動觸發 Email 報表（測試用） |
+| `GET` | `/dashboard` | 監控儀表板（含設定頁） |
+| `GET` | `/admin/settings` | 取得後台設定 |
+| `POST` | `/admin/settings` | 更新後台設定 |
+| `POST` | `/admin/send-report-now` | 手動觸發 Email 報表 |
 | `GET` | `/docs` | Swagger 互動文件 |
+
+---
+
+## 監控儀表板
+
+https://bos-etmall.zeabur.app/dashboard
+
+左側選單功能：
+- **監控儀表板**：今日/本月/累計訂單統計、最新訂單表格、店家分布
+- **健康檢查**：API 連線狀態
+- **設定**：Email 收件人管理（UI 直接設定，不需改環境變數）
+- **API 文件**：Swagger UI
 
 ---
 
@@ -81,7 +96,7 @@ Content-Type: application/json
 
 **試算表：** [BOS-ETMALL](https://docs.google.com/spreadsheets/d/1iiP-PyMWOlaqpKP9Q_EzZ8Z2KqNIII1-0Ac4thUY6m4/edit)
 
-每筆符合條件的訂單會即時寫入第一個工作表，欄位順序：
+每筆訂單即時寫入，欄位順序：
 
 ```
 訂單編號 | 店家ID | 店家名稱 | 消費者手機 | 消費者姓名 | 消費金額 | 訂單狀態 | 訂單時間 | 接收時間
@@ -93,7 +108,8 @@ Content-Type: application/json
 
 - **時間：** 每天早上 09:00（台北時間）
 - **內容：** 前一天新收到的訂單名單
-- **收件人：** 設定於 `EMAIL_RECIPIENTS` 環境變數（逗號分隔多個信箱）
+- **收件人：** 從後台儀表板「設定」頁面管理（或 `EMAIL_RECIPIENTS` 環境變數）
+- **發送服務：** Zeabur Email API
 
 ---
 
@@ -104,10 +120,10 @@ Content-Type: application/json
 | `DATABASE_URL` | ✅ | PostgreSQL 連線字串 |
 | `GOOGLE_SHEET_ID` | ✅ | Google Sheet ID |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | ✅ | Service Account 憑證（JSON 字串） |
-| `SMTP_USER` | ❌ | Gmail 信箱 |
-| `SMTP_PASSWORD` | ❌ | Gmail 應用程式密碼 |
-| `EMAIL_RECIPIENTS` | ❌ | 收件人（逗號分隔） |
-| `MIN_ORDER_AMOUNT` | ❌ | 最低金額篩選（預設 1000，目前已停用） |
+| `ZEABUR_EMAIL_API_KEY` | ❌ | Zeabur Email API Key |
+| `EMAIL_FROM` | ❌ | 發件人（需為已驗證網域，例如 report@mlgroup.vip） |
+| `EMAIL_RECIPIENTS` | ❌ | 預設收件人（逗號分隔，可從後台 UI 覆蓋） |
+| `WEBHOOK_SECRET` | ❌ | Webhook 安全驗證（可選） |
 
 ---
 
@@ -118,39 +134,28 @@ Content-Type: application/json
 | 服務 | 說明 |
 |------|------|
 | bos-etmall 後端 | Python FastAPI |
-| bos-etmall 資料庫 | PostgreSQL 18.3 |
-
-### 資料庫連線
-
-```
-Host: 54.168.143.169
-Port: 31225
-Database: zeabur
-User: root
-```
+| bos-etmall 資料庫 | PostgreSQL |
 
 ### Google Cloud
 
-- **Project：** gen-lang-client-0895534454 (AI Image to Video)
+- **Project：** gen-lang-client-0895534454
 - **Service Account：** pos-backend-sheets@gen-lang-client-0895534454.iam.gserviceaccount.com
 - **啟用 API：** Google Sheets API
+
+### Zeabur Email
+
+- **網域：** mlgroup.vip（已驗證）
+- **發件人：** report@mlgroup.vip
 
 ---
 
 ## 本機開發
 
 ```bash
-# 安裝套件
 pip install -r requirements.txt
-
-# 建立 .env（參考 .env.example）
 cp .env.example .env
-
-# 啟動
 uvicorn main:app --reload
-
-# Swagger 文件
-open http://localhost:8000/docs
+open http://localhost:8000/dashboard
 ```
 
 ---
@@ -159,12 +164,13 @@ open http://localhost:8000/docs
 
 ```
 pos-backend/
-├── main.py          # FastAPI 主程式
-├── models.py        # 資料表定義
+├── main.py          # FastAPI 主程式（路由、排程）
+├── models.py        # 資料表定義（Order、Setting）
 ├── schemas.py       # API 資料格式
 ├── database.py      # DB 連線
 ├── sheets.py        # Google Sheets 整合
-├── email_service.py # Email 報表
+├── email_service.py # Zeabur Email 報表
+├── dashboard.py     # 監控儀表板 HTML
 ├── config.py        # 環境變數
 ├── Dockerfile       # 容器化
 ├── zbpack.json      # Zeabur 設定
