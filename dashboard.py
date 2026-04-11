@@ -417,20 +417,44 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <div style="font-size:11px;color:#64748d;margin-top:5px;">每行輸入一個 Email，儲存後立即生效</div>
       </div>
 
-      <div style="display:flex;gap:10px;align-items:center;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
         <button onclick="saveSettings()"
           style="background:#533afd;color:#fff;border:none;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;">
           儲存設定
         </button>
-        <button onclick="sendTodayReport()"
-          style="background:transparent;color:#533afd;border:1px solid #b9b9f9;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
-          立即發送今日正式報表
-        </button>
-        <button onclick="sendTestReport()"
-          style="background:transparent;color:#64748d;border:1px solid #e5edf5;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
-          發送測試信
-        </button>
         <span id="settingsMsg" style="font-size:12px;color:#108c3d;display:none;">已儲存</span>
+      </div>
+
+      <div style="border-top:1px solid #e5edf5;padding-top:20px;">
+        <label style="font-size:12px;font-weight:500;color:#273951;display:block;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">手動發送報表</label>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+          <div>
+            <div style="font-size:11px;color:#64748d;margin-bottom:4px;">開始日期</div>
+            <input type="date" id="dateFrom"
+              style="border:1px solid #e5edf5;border-radius:4px;padding:7px 10px;font-family:inherit;font-size:13px;color:#061b31;outline:none;"
+              onfocus="this.style.borderColor='#533afd'" onblur="this.style.borderColor='#e5edf5'">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#64748d;margin-bottom:4px;">結束日期</div>
+            <input type="date" id="dateTo"
+              style="border:1px solid #e5edf5;border-radius:4px;padding:7px 10px;font-family:inherit;font-size:13px;color:#061b31;outline:none;"
+              onfocus="this.style.borderColor='#533afd'" onblur="this.style.borderColor='#e5edf5'">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button onclick="sendDateReport()"
+            style="background:#533afd;color:#fff;border:none;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;">
+            發送指定區間報表
+          </button>
+          <button onclick="sendTodayReport()"
+            style="background:transparent;color:#533afd;border:1px solid #b9b9f9;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
+            發送今日報表
+          </button>
+          <button onclick="sendTestReport()"
+            style="background:transparent;color:#64748d;border:1px solid #e5edf5;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
+            發送測試信
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -499,6 +523,20 @@ async function saveSettings() {
     msg.style.display = 'inline';
     setTimeout(() => msg.style.display = 'none', 2500);
   } catch(e) { alert('儲存失敗'); }
+}
+
+async function sendDateReport() {
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+  if (!from) { alert('請選擇開始日期'); return; }
+  const toDate = to || from;
+  if (!confirm(`確定要發送 ${from} 至 ${toDate} 的報表？`)) return;
+  try {
+    const r = await fetch(`/admin/send-date-report?start_date=${from}&end_date=${toDate}`, { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) alert(d.message || '報表已發送！');
+    else alert('發送失敗：' + (d.detail || JSON.stringify(d)));
+  } catch(e) { alert('發送失敗'); }
 }
 
 async function sendTodayReport() {

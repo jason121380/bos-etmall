@@ -220,6 +220,67 @@ def send_today_report(db: Session = Depends(get_db)):
     return {"status": "ok", "message": f"Today report sent: {len(orders)} orders"}
 
 
+@app.post("/admin/send-date-report")
+def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_db)):
+    """發送指定日期區間的報表"""
+    from datetime import date as date_type
+    try:
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="日期格式錯誤，請使用 YYYY-MM-DD")
+
+    if end < start:
+        raise HTTPException(status_code=400, detail="結束日期不能早於開始日期")
+
+    start_dt = datetime.combine(start, datetime.min.time())
+    end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
+
+    orders = (
+        db.query(models.Order)
+        .filter(models.Order.received_at >= start_dt)
+        .filter(models.Order.received_at < end_dt)
+        .all()
+    )
+
+    recipients_row = db.query(models.Setting).filter(models.Setting.key == "email_recipients").first()
+    if recipients_row and recipients_row.value:
+        settings.EMAIL_RECIPIENTS = recipients_row.value
+
+    fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
+    fields = fields_row.value.split(",") if fields_row and fields_row.value else None
+
+    label = start_date if start_date == end_date else f"{start_date} ~ {end_date}"
+    from email_service import build_email_html, build_csv_base64, send_daily_report
+    import base64, requests as req
+    from config import settings as cfg
+
+    recipients = cfg.get_recipients()
+    if not recipients:
+        raise HTTPException(status_code=400, detail="未設定收件人")
+
+    report_date = start  # use start date as label date
+    html_content = build_email_html(orders, report_date, fields)
+    subject = f"{label}，點數儲值名單 — 共 {len(orders)} 筆"
+    csv_b64 = build_csv_base64(orders, fields or ["store_name", "consumer_phone", "order_time"])
+    filename = f"名留集團_點數儲值名單_{start_date}_{end_date}.csv"
+
+    resp = req.post(
+        "https://api.zeabur.com/api/v1/zsend/emails",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {cfg.ZEABUR_EMAIL_API_KEY}"},
+        json={
+            "from": f"名留集團 <{cfg.EMAIL_FROM}>",
+            "to": recipients,
+            "subject": subject,
+            "html": html_content,
+            "attachments": [{"filename": filename, "content": csv_b64, "content_type": "text/csv"}],
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return {"status": "ok", "message": f"報表已發送：{label}，共 {len(orders)} 筆"}
+
+
 @app.post("/admin/test-email")
 def test_email(db: Session = Depends(get_db)):
     """發送測試信（使用今日所有訂單）"""
