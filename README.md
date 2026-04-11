@@ -34,8 +34,12 @@ FastAPI 後端 (Zeabur)
 | `GET` | `/dashboard` | 監控儀表板（含設定頁） |
 | `GET` | `/admin/settings` | 取得後台設定 |
 | `POST` | `/admin/settings` | 更新後台設定 |
-| `POST` | `/admin/send-report-now` | 手動觸發 Email 報表 |
-| `GET` | `/docs` | Swagger 互動文件 |
+| `GET` | `/admin/email-logs` | 查詢 Email 發送紀錄 |
+| `POST` | `/admin/send-report-now` | 手動觸發昨日 Email 報表 |
+| `POST` | `/admin/send-today-report` | 立即發送今日報表 |
+| `POST` | `/admin/send-date-report` | 發送指定日期區間報表 |
+| `POST` | `/admin/test-email` | 發送測試信 |
+| `GET` | `/docs` | API 互動文件（Notion 風格） |
 
 ---
 
@@ -46,8 +50,12 @@ https://bos-etmall.zeabur.app/dashboard
 左側選單功能：
 - **監控儀表板**：今日/本月/累計訂單統計、最新訂單表格、店家分布
 - **健康檢查**：API 連線狀態
-- **設定**：Email 收件人管理（UI 直接設定，不需改環境變數）
-- **API 文件**：Swagger UI
+- **設定**：
+  - Email 欄位多選（9 個欄位可自由勾選）
+  - 收件人管理（UI 直接設定，不需改環境變數）
+  - 手動發送報表（今日、指定日期/區間）
+  - **Email 發送紀錄**（顯示最近 20 筆，含時間/類型/筆數/狀態）
+- **API 文件**：Swagger UI（Notion 風格 + 繁中說明）
 
 ---
 
@@ -71,9 +79,15 @@ Content-Type: application/json
 
 **order_status 可接受值：** `completed` / `paid` / `confirmed` / `success` / `done`
 
+**自動篩選條件：**
+- 訂單狀態需在白名單內
+- 消費金額 ≥ NT$1,000（`MIN_ORDER_AMOUNT`）
+
 ---
 
-## 資料庫欄位（orders 表）
+## 資料庫欄位
+
+### orders 表
 
 | 欄位 | 類型 | 說明 |
 |------|------|------|
@@ -90,26 +104,36 @@ Content-Type: application/json
 | emailed | bool | 是否已寄入 Email 報表 |
 | synced_to_sheet | bool | 是否已同步 Google Sheet |
 
----
+### email_logs 表
 
-## Google Sheets
+| 欄位 | 類型 | 說明 |
+|------|------|------|
+| id | int | 自動遞增 |
+| sent_at | datetime | 發送時間 |
+| trigger | string | `schedule` / `manual_today` / `manual_date` / `test` |
+| date_range | string | 報表涵蓋日期區間 |
+| order_count | int | 發送筆數 |
+| recipients | string | 收件人（逗號分隔） |
+| status | string | `ok` / `error` |
+| error | string | 錯誤訊息（失敗時） |
 
-**試算表：** [BOS-ETMALL](https://docs.google.com/spreadsheets/d/1iiP-PyMWOlaqpKP9Q_EzZ8Z2KqNIII1-0Ac4thUY6m4/edit)
+### settings 表
 
-每筆訂單即時寫入，欄位順序：
-
-```
-訂單編號 | 店家ID | 店家名稱 | 消費者手機 | 消費者姓名 | 消費金額 | 訂單狀態 | 訂單時間 | 接收時間
-```
+| key | 說明 |
+|-----|------|
+| `email_recipients` | 收件人清單（逗號分隔） |
+| `email_fields` | 報表欄位（逗號分隔） |
 
 ---
 
 ## 每日 Email 報表
 
 - **時間：** 每天早上 09:00（台北時間）
-- **內容：** 前一天新收到的訂單名單
-- **收件人：** 從後台儀表板「設定」頁面管理（或 `EMAIL_RECIPIENTS` 環境變數）
+- **寄件人：** 名留集團 ML Group `<report@mlgroup.vip>`
+- **內容：** 前一天新收到的訂單名單（HTML 表格 + CSV 附件）
+- **收件人：** 從後台儀表板「設定」頁面管理
 - **發送服務：** Zeabur Email API
+- **CSV 檔名：** `名留集團 ML Group_點數儲值名單_YYYYMMDD.csv`
 
 ---
 
@@ -122,8 +146,9 @@ Content-Type: application/json
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | ✅ | Service Account 憑證（JSON 字串） |
 | `ZEABUR_EMAIL_API_KEY` | ❌ | Zeabur Email API Key |
 | `EMAIL_FROM` | ❌ | 發件人（需為已驗證網域，例如 report@mlgroup.vip） |
-| `EMAIL_RECIPIENTS` | ❌ | 預設收件人（逗號分隔，可從後台 UI 覆蓋） |
+| `EMAIL_RECIPIENTS` | ❌ | 預設收件人（可從後台 UI 覆蓋，建議用後台設定） |
 | `WEBHOOK_SECRET` | ❌ | Webhook 安全驗證（可選） |
+| `MIN_ORDER_AMOUNT` | ❌ | 最低訂單金額篩選（預設 1000） |
 
 ---
 
@@ -165,7 +190,7 @@ open http://localhost:8000/dashboard
 ```
 pos-backend/
 ├── main.py          # FastAPI 主程式（路由、排程）
-├── models.py        # 資料表定義（Order、Setting）
+├── models.py        # 資料表定義（Order、Setting、EmailLog）
 ├── schemas.py       # API 資料格式
 ├── database.py      # DB 連線
 ├── sheets.py        # Google Sheets 整合

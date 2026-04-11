@@ -62,12 +62,11 @@ def build_email_html(orders: list, report_date: date, fields: list = None) -> st
 
 def build_csv_base64(orders: list, fields: list) -> str:
     buf = io.StringIO()
-    # BOM for Excel compatibility
-    buf.write('\ufeff')
     writer = csv.writer(buf)
     writer.writerow([FIELD_LABELS.get(f, f) for f in fields])
     for o in orders:
         writer.writerow([get_field_value(o, f) for f in fields])
+    # utf-8-sig adds BOM automatically for Excel compatibility
     content = buf.getvalue().encode("utf-8-sig")
     return base64.b64encode(content).decode("ascii")
 

@@ -2,6 +2,19 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, 
 from database import Base
 
 
+class EmailLog(Base):
+    __tablename__ = "email_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sent_at = Column(DateTime, server_default=func.now())
+    trigger = Column(String)        # "schedule" / "manual_today" / "manual_date" / "test"
+    date_range = Column(String)     # e.g. "2026-04-10" or "2026-04-01 ~ 2026-04-10"
+    order_count = Column(Integer)
+    recipients = Column(Text)       # comma-separated
+    status = Column(String)         # "ok" / "error"
+    error = Column(Text, nullable=True)
+
+
 class Setting(Base):
     __tablename__ = "settings"
 

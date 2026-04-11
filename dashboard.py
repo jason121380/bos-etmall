@@ -425,7 +425,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <span id="settingsMsg" style="font-size:12px;color:#108c3d;display:none;">已儲存</span>
       </div>
 
-      <div style="border-top:1px solid #e5edf5;padding-top:20px;">
+      <div style="border-top:1px solid #e5edf5;padding-top:20px;margin-bottom:20px;">
         <label style="font-size:12px;font-weight:500;color:#273951;display:block;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">手動發送報表</label>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
           <div>
@@ -454,6 +454,30 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             style="background:transparent;color:#64748d;border:1px solid #e5edf5;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
             發送測試信
           </button>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #e5edf5;padding-top:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <label style="font-size:12px;font-weight:500;color:#273951;text-transform:uppercase;letter-spacing:0.5px;">Email 發送紀錄</label>
+          <button onclick="loadEmailLogs()"
+            style="background:transparent;color:#64748d;border:1px solid #e5edf5;padding:4px 12px;border-radius:4px;font-size:12px;font-family:inherit;cursor:pointer;">重新整理</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;" id="emailLogTable">
+            <thead>
+              <tr style="background:#f6f9fc;">
+                <th style="text-align:left;padding:8px 10px;color:#64748d;font-weight:500;border-bottom:1px solid #e5edf5;">時間</th>
+                <th style="text-align:left;padding:8px 10px;color:#64748d;font-weight:500;border-bottom:1px solid #e5edf5;">類型</th>
+                <th style="text-align:left;padding:8px 10px;color:#64748d;font-weight:500;border-bottom:1px solid #e5edf5;">日期區間</th>
+                <th style="text-align:center;padding:8px 10px;color:#64748d;font-weight:500;border-bottom:1px solid #e5edf5;">筆數</th>
+                <th style="text-align:center;padding:8px 10px;color:#64748d;font-weight:500;border-bottom:1px solid #e5edf5;">狀態</th>
+              </tr>
+            </thead>
+            <tbody id="emailLogBody">
+              <tr><td colspan="5" style="text-align:center;padding:16px;color:#94a3b8;">載入中…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -486,7 +510,7 @@ function showView(view) {
   document.getElementById('pageTitle').textContent = titles[view] || view;
 
   if (view === 'health') loadHealth();
-  if (view === 'settings') loadSettings();
+  if (view === 'settings') { loadSettings(); loadEmailLogs(); }
 }
 
 const DEFAULT_FIELDS = 'store_name,consumer_phone,order_time';
@@ -557,6 +581,37 @@ async function sendTestReport() {
     if (r.ok) alert('測試信已發送！收件人：' + (d.recipients || []).join(', '));
     else alert('發送失敗：' + (d.detail || JSON.stringify(d)));
   } catch(e) { alert('發送失敗'); }
+}
+
+const TRIGGER_LABELS = {
+  schedule: '排程（自動）', manual_today: '今日報表', manual_date: '指定區間', test: '測試信'
+};
+
+async function loadEmailLogs() {
+  try {
+    const logs = await fetch('/admin/email-logs?limit=20').then(r => r.json());
+    const body = document.getElementById('emailLogBody');
+    if (!logs.length) {
+      body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:#94a3b8;">尚無發送紀錄</td></tr>';
+      return;
+    }
+    body.innerHTML = logs.map(l => {
+      const t = l.sent_at ? new Date(l.sent_at).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+      const statusBadge = l.status === 'ok'
+        ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:11px;">成功</span>'
+        : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:11px;" title="' + (l.error||'') + '">失敗</span>';
+      return `<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px 10px;color:#273951;">${t}</td>
+        <td style="padding:8px 10px;color:#273951;">${TRIGGER_LABELS[l.trigger] || l.trigger}</td>
+        <td style="padding:8px 10px;color:#273951;">${l.date_range || '—'}</td>
+        <td style="padding:8px 10px;text-align:center;color:#273951;">${l.order_count}</td>
+        <td style="padding:8px 10px;text-align:center;">${statusBadge}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('emailLogBody').innerHTML =
+      '<tr><td colspan="5" style="text-align:center;padding:16px;color:#94a3b8;">載入失敗</td></tr>';
+  }
 }
 
 async function loadHealth() {

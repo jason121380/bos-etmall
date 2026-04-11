@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import Depends, FastAPI, HTTPException, Header, Request
+from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
@@ -50,14 +50,28 @@ def run_daily_email():
         fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
         fields = fields_row.value.split(",") if fields_row and fields_row.value else None
 
+        recip = settings.get_recipients()
         send_daily_report(new_orders, yesterday, fields)
 
         for o in new_orders:
             o.emailed = True
+        db.add(models.EmailLog(
+            trigger="schedule",
+            date_range=str(yesterday),
+            order_count=len(new_orders),
+            recipients=",".join(recip),
+            status="ok",
+        ))
         db.commit()
         logger.info(f"Daily email done: {len(new_orders)} orders")
     except Exception as e:
         logger.error(f"Daily email job failed: {e}")
+        try:
+            db.add(models.EmailLog(trigger="schedule", date_range=str(date.today() - timedelta(days=1)),
+                                   order_count=0, recipients="", status="error", error=str(e)))
+            db.commit()
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -77,7 +91,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    scheduler.shutdown()
+    if scheduler.running:
+        scheduler.shutdown()
 
 
 app = FastAPI(
@@ -226,6 +241,20 @@ def receive_order(
             order_id=payload.order_id,
         )
 
+    # 篩選：訂單狀態 + 消費金額
+    if payload.order_status.lower() not in VALID_STATUSES:
+        return schemas.WebhookResponse(
+            status="ignored",
+            message=f"Order status '{payload.order_status}' not in valid list",
+            order_id=payload.order_id,
+        )
+    if payload.amount < settings.MIN_ORDER_AMOUNT:
+        return schemas.WebhookResponse(
+            status="ignored",
+            message=f"Amount {payload.amount} below minimum {settings.MIN_ORDER_AMOUNT}",
+            order_id=payload.order_id,
+        )
+
     # 寫入資料庫
     order = models.Order(
         order_id=payload.order_id,
@@ -347,7 +376,16 @@ def send_today_report(db: Session = Depends(get_db)):
     fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
     fields = fields_row.value.split(",") if fields_row and fields_row.value else None
 
+    recipients = settings.get_recipients()
     send_daily_report(orders, today, fields)
+    db.add(models.EmailLog(
+        trigger="manual_today",
+        date_range=str(today),
+        order_count=len(orders),
+        recipients=",".join(recipients),
+        status="ok",
+    ))
+    db.commit()
     return {"status": "ok", "message": f"Today report sent: {len(orders)} orders"}
 
 
@@ -364,7 +402,6 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
     - 單日：`/admin/send-date-report?start_date=2026-04-10&end_date=2026-04-10`
     - 區間：`/admin/send-date-report?start_date=2026-04-01&end_date=2026-04-10`
     """
-    from datetime import date as date_type
     try:
         start = datetime.strptime(start_date, "%Y-%m-%d").date()
         end = datetime.strptime(end_date, "%Y-%m-%d").date()
@@ -392,8 +429,8 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
     fields = fields_row.value.split(",") if fields_row and fields_row.value else None
 
     label = start_date if start_date == end_date else f"{start_date} ~ {end_date}"
-    from email_service import build_email_html, build_csv_base64, send_daily_report
-    import base64, requests as req
+    from email_service import build_email_html, build_csv_base64
+    import requests as req
     from config import settings as cfg
 
     recipients = cfg.get_recipients()
@@ -419,7 +456,34 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
         timeout=15,
     )
     resp.raise_for_status()
+    db.add(models.EmailLog(
+        trigger="manual_date",
+        date_range=label,
+        order_count=len(orders),
+        recipients=",".join(recipients),
+        status="ok",
+    ))
+    db.commit()
     return {"status": "ok", "message": f"報表已發送：{label}，共 {len(orders)} 筆"}
+
+
+@app.get("/admin/email-logs", tags=["後台管理"], summary="查詢 Email 發送紀錄")
+def get_email_logs(limit: int = 30, db: Session = Depends(get_db)):
+    """回傳最近 N 筆 Email 發送紀錄（預設 30 筆），最新的在最前。"""
+    rows = db.query(models.EmailLog).order_by(models.EmailLog.sent_at.desc()).limit(limit).all()
+    return [
+        {
+            "id": r.id,
+            "sent_at": r.sent_at.isoformat() if r.sent_at else None,
+            "trigger": r.trigger,
+            "date_range": r.date_range,
+            "order_count": r.order_count,
+            "recipients": r.recipients,
+            "status": r.status,
+            "error": r.error,
+        }
+        for r in rows
+    ]
 
 
 @app.post("/admin/test-email", tags=["後台管理"], summary="發送測試信")
@@ -457,4 +521,13 @@ def test_email(db: Session = Depends(get_db)):
         json={"from": f"名留集團 ML Group <{settings.EMAIL_FROM}>", "to": recipients, "subject": "名留集團 ML Group — Email 測試信", "html": html},
         timeout=15,
     )
-    return {"status": "ok", "zeabur_response": resp.json(), "recipients": recipients}
+    result = resp.json()
+    db.add(models.EmailLog(
+        trigger="test",
+        date_range="—",
+        order_count=len(orders),
+        recipients=",".join(recipients),
+        status="ok",
+    ))
+    db.commit()
+    return {"status": "ok", "zeabur_response": result, "recipients": recipients}
