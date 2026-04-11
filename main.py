@@ -56,10 +56,13 @@ async def lifespan(app: FastAPI):
     # 建立資料表
     Base.metadata.create_all(bind=engine)
 
-    # 啟動排程：每天 09:00 台北時間
-    scheduler.add_job(run_daily_email, "cron", hour=9, minute=0, id="daily_email")
-    scheduler.start()
-    logger.info("Scheduler started — daily email at 09:00 Taipei time")
+    # 啟動排程：每天 09:00 台北時間（僅在 Email 設定完成時啟用）
+    if settings.email_enabled:
+        scheduler.add_job(run_daily_email, "cron", hour=9, minute=0, id="daily_email")
+        scheduler.start()
+        logger.info("Scheduler started — daily email at 09:00 Taipei time")
+    else:
+        logger.info("Email not configured — scheduler skipped")
 
     yield
 
@@ -133,11 +136,12 @@ def receive_order(
     db.commit()
     db.refresh(order)
 
-    # 同步 Google Sheets（非同步不阻塞，失敗不影響 response）
-    synced = sync_order_to_sheet(order)
-    if synced:
-        order.synced_to_sheet = True
-        db.commit()
+    # 同步 Google Sheets（可選，未設定時跳過）
+    if settings.sheets_enabled:
+        synced = sync_order_to_sheet(order)
+        if synced:
+            order.synced_to_sheet = True
+            db.commit()
 
     logger.info(f"New order accepted: {order.order_id} | {order.consumer_phone} | NT${order.amount}")
 
