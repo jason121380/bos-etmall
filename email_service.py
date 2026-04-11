@@ -17,7 +17,7 @@ FIELD_LABELS = {
     "received_at":    "接收時間",
 }
 
-DEFAULT_FIELDS = ["order_id", "store_name", "consumer_name", "consumer_phone", "amount", "order_status", "order_time"]
+DEFAULT_FIELDS = ["store_name", "consumer_phone", "order_time"]
 
 
 def get_field_value(order, field: str) -> str:

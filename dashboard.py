@@ -465,7 +465,7 @@ function showView(view) {
   if (view === 'settings') loadSettings();
 }
 
-const DEFAULT_FIELDS = 'order_id,store_name,consumer_name,consumer_phone,amount,order_status,order_time';
+const DEFAULT_FIELDS = 'store_name,consumer_phone,order_time';
 
 async function loadSettings() {
   try {
