@@ -44,8 +44,8 @@ def build_email_html(orders: list, report_date: date, fields: list = None) -> st
 
     return f"""
     <html><body style="font-family:sans-serif;">
-    <h2 style="color:#061b31;">每日消費名單報表 — {report_date.strftime('%Y/%m/%d')}</h2>
-    <p style="color:#64748d;">共 <strong>{len(orders)}</strong> 筆訂單</p>
+    <h2 style="color:#061b31;">{report_date.strftime('%Y/%m/%d')}，每日點數儲值名單</h2>
+    <p style="color:#64748d;">共 <strong>{len(orders)}</strong> 筆</p>
     <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;margin-top:12px;">
         <thead style="background:#533afd;color:white;">
             <tr>{headers}</tr>
@@ -68,7 +68,7 @@ def send_daily_report(orders: list, report_date: date, fields: list = None):
         return
 
     html_content = build_email_html(orders, report_date, fields)
-    subject = f"每日消費名單 {report_date.strftime('%Y/%m/%d')} — 共 {len(orders)} 筆"
+    subject = f"{report_date.strftime('%Y/%m/%d')}，每日點數儲值名單 — 共 {len(orders)} 筆"
 
     try:
         resp = requests.post(
@@ -78,7 +78,7 @@ def send_daily_report(orders: list, report_date: date, fields: list = None):
                 "Authorization": f"Bearer {settings.ZEABUR_EMAIL_API_KEY}",
             },
             json={
-                "from": settings.EMAIL_FROM,
+                "from": f"名留集團 <{settings.EMAIL_FROM}>",
                 "to": recipients,
                 "subject": subject,
                 "html": html_content,

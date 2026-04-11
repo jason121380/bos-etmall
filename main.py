@@ -248,7 +248,7 @@ def test_email(db: Session = Depends(get_db)):
     resp = req.post(
         "https://api.zeabur.com/api/v1/zsend/emails",
         headers={"Authorization": f"Bearer {settings.ZEABUR_EMAIL_API_KEY}", "Content-Type": "application/json"},
-        json={"from": settings.EMAIL_FROM, "to": recipients, "subject": "BOS-ETMALL 測試信", "html": html},
+        json={"from": f"名留集團 <{settings.EMAIL_FROM}>", "to": recipients, "subject": "名留集團 — Email 測試信", "html": html},
         timeout=15,
     )
     return {"status": "ok", "zeabur_response": resp.json(), "recipients": recipients}
