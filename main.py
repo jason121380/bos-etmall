@@ -191,6 +191,29 @@ def trigger_report_now(db: Session = Depends(get_db)):
     return {"status": "ok", "message": "Report triggered"}
 
 
+@app.post("/admin/send-today-report")
+def send_today_report(db: Session = Depends(get_db)):
+    """立即發送今日正式報表"""
+    today = date.today()
+    start = datetime.combine(today, datetime.min.time())
+    end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+
+    orders = (
+        db.query(models.Order)
+        .filter(models.Order.received_at >= start)
+        .filter(models.Order.received_at < end)
+        .all()
+    )
+
+    # 優先讀 DB 設定的收件人
+    recipients_row = db.query(models.Setting).filter(models.Setting.key == "email_recipients").first()
+    if recipients_row and recipients_row.value:
+        settings.EMAIL_RECIPIENTS = recipients_row.value
+
+    send_daily_report(orders, today)
+    return {"status": "ok", "message": f"Today report sent: {len(orders)} orders"}
+
+
 @app.post("/admin/test-email")
 def test_email(db: Session = Depends(get_db)):
     """發送測試信（使用今日所有訂單）"""

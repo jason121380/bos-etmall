@@ -389,9 +389,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           style="background:#533afd;color:#fff;border:none;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;">
           儲存設定
         </button>
-        <button onclick="sendTestReport()"
+        <button onclick="sendTodayReport()"
           style="background:transparent;color:#533afd;border:1px solid #b9b9f9;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
-          立即發送測試報表
+          立即發送今日正式報表
+        </button>
+        <button onclick="sendTestReport()"
+          style="background:transparent;color:#64748d;border:1px solid #e5edf5;padding:8px 18px;border-radius:4px;font-size:13px;font-family:inherit;cursor:pointer;">
+          發送測試信
         </button>
         <span id="settingsMsg" style="font-size:12px;color:#108c3d;display:none;">已儲存</span>
       </div>
@@ -449,6 +453,16 @@ async function saveSettings() {
     msg.style.display = 'inline';
     setTimeout(() => msg.style.display = 'none', 2500);
   } catch(e) { alert('儲存失敗'); }
+}
+
+async function sendTodayReport() {
+  if (!confirm('確定要立即發送今日正式報表？')) return;
+  try {
+    const r = await fetch('/admin/send-today-report', { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) alert('今日報表已發送！共 ' + (d.message || ''));
+    else alert('發送失敗：' + (d.detail || JSON.stringify(d)));
+  } catch(e) { alert('發送失敗'); }
 }
 
 async function sendTestReport() {
