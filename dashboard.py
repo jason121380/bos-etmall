@@ -14,105 +14,148 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     background: #f6f9fc;
     color: #061b31;
     min-height: 100vh;
+    display: flex;
     font-weight: 300;
   }
 
-  /* Header */
-  .header {
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 220px;
+    min-height: 100vh;
     background: #ffffff;
-    border-bottom: 1px solid #e5edf5;
-    padding: 0 32px;
-    height: 60px;
+    border-right: 1px solid #e5edf5;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: rgba(0,55,112,0.08) 0px 2px 8px;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 200;
+    box-shadow: rgba(50,50,93,0.08) 2px 0 12px;
   }
 
-  .header-left { display: flex; align-items: center; gap: 12px; }
+  .sidebar-logo {
+    padding: 20px 18px 16px;
+    border-bottom: 1px solid #e5edf5;
+    display: flex; align-items: center; gap: 10px;
+  }
 
   .logo-mark {
     width: 28px; height: 28px; background: #533afd;
     border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
   }
-  .logo-mark svg { width: 16px; height: 16px; fill: white; }
+  .logo-mark svg { width: 15px; height: 15px; fill: white; }
 
-  .header h1 {
-    font-size: 15px; font-weight: 500; color: #061b31;
-    letter-spacing: -0.2px;
+  .logo-text {
+    font-size: 13px; font-weight: 600; color: #061b31;
+    letter-spacing: -0.3px; line-height: 1.2;
   }
+  .logo-sub { font-size: 10px; color: #64748d; font-weight: 400; margin-top: 1px; }
 
-  .header-right { display: flex; align-items: center; gap: 20px; }
-
-  .status-badge {
-    display: flex; align-items: center; gap: 6px;
-    background: rgba(21,190,83,0.1);
-    border: 1px solid rgba(21,190,83,0.3);
-    border-radius: 4px;
-    padding: 4px 10px;
-    font-size: 12px; font-weight: 400; color: #108c3d;
+  /* Nav */
+  .nav-section {
+    padding: 12px 10px 6px;
   }
-  .status-badge.offline { background: rgba(234,34,97,0.08); border-color: rgba(234,34,97,0.25); color: #c41e5a; }
-
-  .status-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: #15be53;
-    animation: pulse 2s infinite;
-  }
-  .status-badge.offline .status-dot { background: #ea2261; animation: none; }
-
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-  .last-update { font-size: 12px; color: #64748d; }
-
-  /* Container */
-  .container { max-width: 1120px; margin: 0 auto; padding: 32px 24px; }
-
-  /* Section label */
-  .section-eyebrow {
-    font-size: 11px; font-weight: 500; color: #533afd;
+  .nav-label {
+    font-size: 10px; font-weight: 500; color: #64748d;
     text-transform: uppercase; letter-spacing: 0.8px;
-    margin-bottom: 6px;
+    padding: 0 8px; margin-bottom: 4px;
   }
 
-  /* Stats grid */
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 13px; font-weight: 400; color: #273951;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 1px;
+  }
+  .nav-item:hover { background: #f6f9fc; color: #533afd; }
+  .nav-item.active {
+    background: rgba(83,58,253,0.08);
+    color: #533afd;
+    font-weight: 500;
+  }
+  .nav-icon {
+    width: 16px; height: 16px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0.7;
+  }
+  .nav-item.active .nav-icon { opacity: 1; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 18px;
+    border-top: 1px solid #e5edf5;
+  }
+  .status-pill {
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 10px;
+    border-radius: 5px;
+    background: rgba(21,190,83,0.08);
+    border: 1px solid rgba(21,190,83,0.25);
+    font-size: 12px; color: #108c3d; font-weight: 400;
+  }
+  .status-pill.offline { background: rgba(234,34,97,0.08); border-color: rgba(234,34,97,0.25); color: #c41e5a; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #15be53; flex-shrink: 0; animation: blink 2s infinite; }
+  .status-pill.offline .status-dot { background: #ea2261; animation: none; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  .status-info { flex: 1; }
+  .status-label { font-size: 11px; color: #64748d; margin-top: 1px; }
+
+  /* ── Main ── */
+  .main {
+    margin-left: 220px;
+    flex: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    background: #ffffff;
+    border-bottom: 1px solid #e5edf5;
+    padding: 0 28px;
+    height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: rgba(0,55,112,0.06) 0px 2px 8px;
+  }
+  .topbar-title { font-size: 14px; font-weight: 500; color: #061b31; letter-spacing: -0.2px; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .last-update { font-size: 12px; color: #64748d; }
+  .refresh-btn {
+    background: transparent; border: 1px solid #e5edf5;
+    color: #64748d; padding: 5px 12px; border-radius: 4px;
+    font-size: 12px; font-family: inherit; font-weight: 400;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .refresh-btn:hover { border-color: #533afd; color: #533afd; background: rgba(83,58,253,0.04); }
+
+  .content { padding: 28px; }
+
+  /* Stats */
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 32px;
+    gap: 14px;
+    margin-bottom: 24px;
   }
 
   .stat-card {
     background: #ffffff;
     border: 1px solid #e5edf5;
     border-radius: 6px;
-    padding: 20px 22px;
-    box-shadow: rgba(50,50,93,0.25) 0px 6px 12px -6px, rgba(0,0,0,0.06) 0px 4px 8px -4px;
+    padding: 18px 20px;
+    box-shadow: rgba(50,50,93,0.12) 0px 4px 10px -4px, rgba(0,0,0,0.05) 0px 2px 6px -2px;
     transition: box-shadow 0.2s;
   }
   .stat-card:hover {
-    box-shadow: rgba(50,50,93,0.25) 0px 13px 27px -12px, rgba(0,0,0,0.1) 0px 8px 16px -8px;
+    box-shadow: rgba(50,50,93,0.22) 0px 10px 22px -10px, rgba(0,0,0,0.08) 0px 6px 12px -6px;
   }
-
-  .stat-label {
-    font-size: 12px; font-weight: 400; color: #64748d;
-    margin-bottom: 10px;
-  }
-
-  .stat-value {
-    font-size: 30px; font-weight: 300; color: #061b31;
-    letter-spacing: -0.8px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    margin-bottom: 6px;
-  }
-
-  .stat-sub { font-size: 12px; color: #64748d; font-weight: 400; }
-
+  .stat-label { font-size: 11px; font-weight: 500; color: #64748d; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 28px; font-weight: 300; color: #061b31; letter-spacing: -0.8px; font-variant-numeric: tabular-nums; line-height: 1; margin-bottom: 5px; }
+  .stat-sub { font-size: 12px; color: #64748d; }
   .stat-card.accent .stat-value { color: #533afd; }
   .stat-card.success .stat-value { color: #108c3d; }
 
@@ -121,221 +164,249 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     background: #ffffff;
     border: 1px solid #e5edf5;
     border-radius: 6px;
-    margin-bottom: 24px;
-    box-shadow: rgba(50,50,93,0.25) 0px 6px 12px -6px, rgba(0,0,0,0.06) 0px 4px 8px -4px;
+    margin-bottom: 20px;
+    box-shadow: rgba(50,50,93,0.12) 0px 4px 10px -4px, rgba(0,0,0,0.05) 0px 2px 6px -2px;
     overflow: hidden;
   }
-
   .panel-header {
-    padding: 16px 22px;
+    padding: 14px 20px;
     border-bottom: 1px solid #e5edf5;
     display: flex; justify-content: space-between; align-items: center;
+    background: #fafcff;
   }
-
-  .panel-title {
-    font-size: 13px; font-weight: 500; color: #061b31;
-    letter-spacing: -0.1px;
-  }
-
-  .refresh-btn {
-    background: transparent;
-    border: 1px solid #e5edf5;
-    color: #64748d;
-    padding: 5px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: inherit;
-    font-weight: 400;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .refresh-btn:hover {
-    border-color: #533afd;
-    color: #533afd;
-    background: rgba(83,58,253,0.04);
-  }
+  .panel-title { font-size: 13px; font-weight: 500; color: #061b31; }
 
   /* Table */
   table { width: 100%; border-collapse: collapse; }
-
   th {
-    padding: 10px 16px;
+    padding: 9px 14px;
     text-align: left;
-    font-size: 11px; font-weight: 500;
-    color: #64748d;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
+    font-size: 11px; font-weight: 500; color: #64748d;
+    text-transform: uppercase; letter-spacing: 0.6px;
     border-bottom: 1px solid #e5edf5;
     background: #f8fafc;
   }
-
   td {
-    padding: 13px 16px;
-    font-size: 13px;
-    color: #273951;
+    padding: 11px 14px;
+    font-size: 13px; color: #273951;
     border-bottom: 1px solid #f0f5fa;
     font-weight: 400;
   }
-
   tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: #f8fafc; }
 
-  .amount {
-    font-weight: 500;
-    color: #061b31;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.2px;
-  }
+  .amount { font-weight: 500; color: #061b31; font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
+  .order-id { font-family: 'SFMono-Regular', monospace; font-size: 11px; color: #533afd; }
 
-  .order-id {
-    font-family: 'SFMono-Regular', 'Consolas', monospace;
-    font-size: 12px;
-    color: #533afd;
-  }
+  .badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 400; }
+  .badge-success { background: rgba(21,190,83,0.12); color: #108c3d; border: 1px solid rgba(21,190,83,0.3); }
+  .badge-neutral { background: #f6f9fc; color: #64748d; border: 1px solid #e5edf5; }
 
-  .badge {
-    display: inline-flex; align-items: center;
-    padding: 2px 7px;
-    border-radius: 4px;
-    font-size: 11px; font-weight: 400;
-  }
-  .badge-success {
-    background: rgba(21,190,83,0.15);
-    color: #108c3d;
-    border: 1px solid rgba(21,190,83,0.35);
-  }
-  .badge-neutral {
-    background: #f6f9fc;
-    color: #64748d;
-    border: 1px solid #e5edf5;
-  }
+  .empty { text-align: center; padding: 48px; color: #64748d; font-size: 13px; }
 
-  .empty {
-    text-align: center; padding: 48px;
-    color: #64748d; font-size: 14px; font-weight: 300;
-  }
-
-  /* Stores grid */
+  /* Stores */
   .stores-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
-    padding: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    padding: 18px;
   }
-
   .store-card {
-    background: #f8fafc;
-    border: 1px solid #e5edf5;
-    border-radius: 5px;
-    padding: 14px 16px;
-    text-align: center;
-    transition: box-shadow 0.15s;
+    background: #f8fafc; border: 1px solid #e5edf5; border-radius: 5px;
+    padding: 12px 14px; text-align: center; transition: all 0.15s;
   }
-  .store-card:hover {
-    box-shadow: rgba(50,50,93,0.15) 0px 6px 12px -6px;
-    background: #ffffff;
-  }
+  .store-card:hover { background: #fff; box-shadow: rgba(50,50,93,0.12) 0px 4px 12px -4px; }
+  .store-name { font-size: 12px; color: #64748d; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .store-count { font-size: 20px; font-weight: 300; color: #533afd; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
+  .store-amount { font-size: 11px; color: #64748d; margin-top: 2px; }
 
-  .store-name {
-    font-size: 12px; color: #64748d; font-weight: 400;
-    margin-bottom: 6px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Health view */
+  .health-view { padding: 28px; display: none; }
+  .health-card {
+    background: #fff; border: 1px solid #e5edf5; border-radius: 6px;
+    padding: 28px;
+    box-shadow: rgba(50,50,93,0.12) 0px 4px 10px -4px;
+    max-width: 480px;
   }
-  .store-count {
-    font-size: 22px; font-weight: 300; color: #533afd;
-    letter-spacing: -0.5px;
-    font-variant-numeric: tabular-nums;
-  }
-  .store-amount { font-size: 11px; color: #64748d; margin-top: 3px; }
+  .health-status { font-size: 36px; font-weight: 300; color: #108c3d; margin-bottom: 8px; }
+  .health-time { font-size: 13px; color: #64748d; }
+  .health-url { font-family: monospace; font-size: 12px; color: #533afd; margin-top: 16px; display: block; }
 
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
+    .sidebar { width: 60px; }
+    .logo-text, .logo-sub, .nav-label, .nav-item span, .status-info { display: none; }
+    .sidebar-logo { justify-content: center; padding: 16px; }
+    .nav-item { justify-content: center; }
+    .sidebar-footer { padding: 12px; }
+    .main { margin-left: 60px; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .header { padding: 0 16px; }
-    .container { padding: 20px 16px; }
   }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
     <div class="logo-mark">
       <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
     </div>
-    <h1>BOS-ETMALL 訂單後台</h1>
-  </div>
-  <div class="header-right">
-    <div class="status-badge" id="statusBadge">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">連線中</span>
-    </div>
-    <span class="last-update" id="lastUpdate"></span>
-  </div>
-</div>
-
-<div class="container">
-
-  <div class="stats-grid">
-    <div class="stat-card success">
-      <div class="stat-label">今日訂單</div>
-      <div class="stat-value" id="todayCount">—</div>
-      <div class="stat-sub" id="todayAmount">NT$ —</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">本月訂單</div>
-      <div class="stat-value" id="monthCount">—</div>
-      <div class="stat-sub" id="monthAmount">NT$ —</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">累計訂單</div>
-      <div class="stat-value" id="totalCount">—</div>
-      <div class="stat-sub" id="totalAmount">NT$ —</div>
-    </div>
-    <div class="stat-card accent">
-      <div class="stat-label">已同步 Sheet</div>
-      <div class="stat-value" id="syncedCount">—</div>
-      <div class="stat-sub">筆已寫入</div>
+    <div>
+      <div class="logo-text">BOS-ETMALL</div>
+      <div class="logo-sub">訂單管理後台</div>
     </div>
   </div>
 
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">最新訂單</span>
+  <nav style="flex:1;padding-top:8px;">
+    <div class="nav-section">
+      <div class="nav-label">主選單</div>
+      <a class="nav-item active" onclick="showView('dashboard')">
+        <span class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+        </span>
+        <span>監控儀表板</span>
+      </a>
+      <a class="nav-item" onclick="showView('health')">
+        <span class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </span>
+        <span>健康檢查</span>
+      </a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">開發者</div>
+      <a class="nav-item" href="/docs" target="_blank">
+        <span class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </span>
+        <span>API 文件</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="status-pill" id="sidebarStatus">
+      <div class="status-dot" id="sidebarDot"></div>
+      <div class="status-info">
+        <div id="sidebarStatusText">連線中</div>
+        <div class="status-label" id="sidebarTime"></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- Main content -->
+<div class="main">
+  <div class="topbar">
+    <span class="topbar-title" id="pageTitle">監控儀表板</span>
+    <div class="topbar-right">
+      <span class="last-update" id="lastUpdate"></span>
       <button class="refresh-btn" onclick="loadData()">重新整理</button>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>訂單編號</th>
-          <th>店家</th>
-          <th>消費者</th>
-          <th>手機</th>
-          <th>金額</th>
-          <th>狀態</th>
-          <th>訂單時間</th>
-          <th>Sheet</th>
-        </tr>
-      </thead>
-      <tbody id="ordersBody">
-        <tr><td colspan="8" class="empty">載入中...</td></tr>
-      </tbody>
-    </table>
   </div>
 
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">店家分布</span>
+  <!-- Dashboard view -->
+  <div id="dashboardView" class="content">
+    <div class="stats-grid">
+      <div class="stat-card success">
+        <div class="stat-label">今日訂單</div>
+        <div class="stat-value" id="todayCount">—</div>
+        <div class="stat-sub" id="todayAmount">NT$ —</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">本月訂單</div>
+        <div class="stat-value" id="monthCount">—</div>
+        <div class="stat-sub" id="monthAmount">NT$ —</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">累計訂單</div>
+        <div class="stat-value" id="totalCount">—</div>
+        <div class="stat-sub" id="totalAmount">NT$ —</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">已同步 Sheet</div>
+        <div class="stat-value" id="syncedCount">—</div>
+        <div class="stat-sub">筆已寫入</div>
+      </div>
     </div>
-    <div class="stores-grid" id="storesGrid">
-      <div style="padding:20px;color:#64748d;font-size:13px;">載入中...</div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">最新訂單</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>訂單編號</th><th>店家</th><th>消費者</th>
+            <th>手機</th><th>金額</th><th>狀態</th><th>訂單時間</th><th>Sheet</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody">
+          <tr><td colspan="8" class="empty">載入中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">店家分布</span>
+      </div>
+      <div class="stores-grid" id="storesGrid">
+        <div style="padding:16px;color:#64748d;font-size:13px;">載入中...</div>
+      </div>
     </div>
   </div>
 
+  <!-- Health view -->
+  <div id="healthView" class="health-view">
+    <div class="health-card">
+      <div class="panel-title" style="margin-bottom:20px;font-size:15px;">系統健康狀態</div>
+      <div class="health-status" id="healthStatus">—</div>
+      <div class="health-time" id="healthTime">—</div>
+      <code class="health-url">GET /health</code>
+    </div>
+  </div>
 </div>
 
 <script>
 const fmt = n => new Intl.NumberFormat('zh-TW').format(n);
-const fmtDate = s => s ? new Date(s).toLocaleString('zh-TW', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+const fmtDate = s => s ? new Date(s).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+
+function showView(view) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('dashboardView').style.display = view === 'dashboard' ? 'block' : 'none';
+  document.getElementById('healthView').style.display = view === 'health' ? 'block' : 'none';
+
+  if (view === 'dashboard') {
+    event.currentTarget.classList.add('active');
+    document.getElementById('pageTitle').textContent = '監控儀表板';
+  } else if (view === 'health') {
+    event.currentTarget.classList.add('active');
+    document.getElementById('pageTitle').textContent = '健康檢查';
+    loadHealth();
+  }
+}
+
+async function loadHealth() {
+  try {
+    const h = await fetch('/health').then(r => r.json());
+    document.getElementById('healthStatus').textContent = h.status === 'ok' ? '✓  正常運作' : '✗  異常';
+    document.getElementById('healthStatus').style.color = h.status === 'ok' ? '#108c3d' : '#ea2261';
+    document.getElementById('healthTime').textContent = '伺服器時間：' + new Date(h.time).toLocaleString('zh-TW');
+  } catch(e) {
+    document.getElementById('healthStatus').textContent = '✗  無法連線';
+    document.getElementById('healthStatus').style.color = '#ea2261';
+  }
+}
 
 async function loadData() {
   try {
@@ -344,16 +415,18 @@ async function loadData() {
       fetch('/orders?limit=200').then(r => r.json())
     ]);
 
-    const badge = document.getElementById('statusBadge');
-    badge.className = 'status-badge';
-    document.getElementById('statusText').textContent = 'API 正常';
-    document.getElementById('lastUpdate').textContent = '更新：' + new Date().toLocaleTimeString('zh-TW');
+    const sp = document.getElementById('sidebarStatus');
+    sp.className = 'status-pill';
+    document.getElementById('sidebarStatusText').textContent = 'API 正常';
+    const now = new Date().toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
+    document.getElementById('sidebarTime').textContent = '更新 ' + now;
+    document.getElementById('lastUpdate').textContent = '最後更新：' + now;
 
-    const now = new Date();
-    const today = orders.filter(o => new Date(o.received_at).toDateString() === now.toDateString());
+    const today_ = new Date();
+    const today = orders.filter(o => new Date(o.received_at).toDateString() === today_.toDateString());
     const month = orders.filter(o => {
       const d = new Date(o.received_at);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      return d.getFullYear() === today_.getFullYear() && d.getMonth() === today_.getMonth();
     });
     const synced = orders.filter(o => o.synced_to_sheet);
 
@@ -391,10 +464,9 @@ async function loadData() {
       storeMap[k].count++;
       storeMap[k].amount += o.amount;
     });
-
     const grid = document.getElementById('storesGrid');
     if (Object.keys(storeMap).length === 0) {
-      grid.innerHTML = '<div style="padding:20px;color:#64748d;font-size:13px;">尚無資料</div>';
+      grid.innerHTML = '<div style="padding:16px;color:#64748d;font-size:13px;">尚無資料</div>';
     } else {
       grid.innerHTML = Object.entries(storeMap)
         .sort((a,b) => b[1].count - a[1].count)
@@ -407,9 +479,9 @@ async function loadData() {
     }
 
   } catch(e) {
-    const badge = document.getElementById('statusBadge');
-    badge.className = 'status-badge offline';
-    document.getElementById('statusText').textContent = 'API 離線';
+    const sp = document.getElementById('sidebarStatus');
+    sp.className = 'status-pill offline';
+    document.getElementById('sidebarStatusText').textContent = 'API 離線';
   }
 }
 
