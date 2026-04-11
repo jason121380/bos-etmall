@@ -561,7 +561,7 @@ def get_email_logs(limit: int = 30, db: Session = Depends(get_db)):
     return [
         {
             "id": r.id,
-            "sent_at": r.sent_at.isoformat() if r.sent_at else None,
+            "sent_at": r.sent_at.isoformat() + "Z" if r.sent_at else None,
             "trigger": r.trigger,
             "date_range": r.date_range,
             "order_count": r.order_count,
