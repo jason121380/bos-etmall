@@ -4,11 +4,13 @@ from datetime import date, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import Depends, FastAPI, HTTPException, Header
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 import models
 import schemas
 from config import settings
+from dashboard import DASHBOARD_HTML
 from database import Base, engine, get_db
 from email_service import send_daily_report
 from sheets import sync_order_to_sheet
@@ -81,6 +83,11 @@ def verify_secret(x_webhook_secret: str = Header(default="")):
     """可選：驗證 POS 傳來的 Secret Header"""
     if settings.WEBHOOK_SECRET and x_webhook_secret != settings.WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def monitoring_dashboard():
+    return DASHBOARD_HTML
 
 
 @app.get("/health")
