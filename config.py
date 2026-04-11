@@ -14,16 +14,14 @@ class Settings(BaseSettings):
     def sheets_enabled(self) -> bool:
         return bool(self.GOOGLE_SHEET_ID and self.GOOGLE_SERVICE_ACCOUNT_JSON and self.GOOGLE_SERVICE_ACCOUNT_JSON != "{}")
 
-    # Email（可選，不填就不寄信）
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: str = ""
-    EMAIL_RECIPIENTS: str = ""
+    # Email via Zeabur Email（可選，不填就不寄信）
+    ZEABUR_EMAIL_API_KEY: str = ""
+    EMAIL_FROM: str = ""        # 發件人，需為已綁定網域，例如 report@yourdomain.com
+    EMAIL_RECIPIENTS: str = ""  # 收件人，逗號分隔
 
     @property
     def email_enabled(self) -> bool:
-        return bool(self.SMTP_USER and self.SMTP_PASSWORD and self.EMAIL_RECIPIENTS)
+        return bool(self.ZEABUR_EMAIL_API_KEY and self.EMAIL_FROM and self.EMAIL_RECIPIENTS)
 
     # Filtering
     MIN_ORDER_AMOUNT: int = 1000
