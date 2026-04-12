@@ -207,7 +207,7 @@ def pwa_manifest():
         "start_url": "/dashboard",
         "display": "standalone",
         "background_color": "#ffffff",
-        "theme_color": "#533afd",
+        "theme_color": "#ffffff",
         "orientation": "portrait-primary",
         "icons": [
             {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},

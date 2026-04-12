@@ -3,7 +3,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#533afd">
+<meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="BOS-ETMALL">
@@ -270,11 +270,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     .sidebar.open { transform: translateX(0); }
     .main { margin-left: 0; }
     .topbar { padding: 0 16px; }
-    .hamburger {
-      display: flex !important; align-items: center; justify-content: center;
-      width: 36px; height: 36px; cursor: pointer; border: none;
-      background: transparent; color: #273951; flex-shrink: 0;
-    }
+    .hamburger { display: none !important; }
     .content { padding: 16px; padding-bottom: 80px; }
     .settings-view, .health-view { padding: 16px; padding-bottom: 80px; }
     .settings-card { max-width: 100%; padding: 20px 16px; }
