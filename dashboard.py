@@ -17,7 +17,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #f6f9fc;
+    background: #ffffff;
     color: #061b31;
     min-height: 100vh;
     display: flex;
@@ -138,7 +138,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   }
   .refresh-btn:hover { border-color: #533afd; color: #533afd; background: rgba(83,58,253,0.04); }
 
-  .content { padding: 28px; }
+  .content { padding: 28px; background: #f6f9fc; flex: 1; }
 
   /* Stats */
   .stats-grid {
@@ -221,7 +221,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .store-amount { font-size: 11px; color: #64748d; margin-top: 2px; }
 
   /* Settings & Health & Docs view */
-  .settings-view, .health-view, .docs-view { padding: 0; display: none; }
+  .settings-view, .health-view, .docs-view { padding: 0; display: none; background: #f6f9fc; flex: 1; }
+  .settings-view, .health-view { padding: 28px; }
   .docs-view { height: calc(100vh - 52px); }
   .docs-view iframe { width: 100%; height: 100%; border: none; }
   @media (max-width: 768px) {
