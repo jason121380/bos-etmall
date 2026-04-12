@@ -220,8 +220,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .store-count { font-size: 20px; font-weight: 300; color: #533afd; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
   .store-amount { font-size: 11px; color: #64748d; margin-top: 2px; }
 
-  /* Settings & Health view */
-  .settings-view, .health-view { padding: 28px; display: none; }
+  /* Settings & Health & Docs view */
+  .settings-view, .health-view, .docs-view { padding: 0; display: none; }
+  .docs-view { height: calc(100vh - 52px); }
+  .docs-view iframe { width: 100%; height: 100%; border: none; }
+  @media (max-width: 768px) {
+    .docs-view { height: calc(100vh - 52px - 56px - env(safe-area-inset-bottom)); }
+  }
   .settings-card, .health-card {
     background: #fff; border: 1px solid #e5edf5; border-radius: 6px;
     padding: 28px;
@@ -338,7 +343,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
     <div class="nav-section">
       <div class="nav-label">開發者</div>
-      <a class="nav-item" href="/docs" target="_blank">
+      <a class="nav-item" onclick="showView('docs')">
         <span class="nav-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -548,6 +553,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Docs view -->
+  <div id="docsView" class="docs-view">
+    <iframe id="docsFrame" src="about:blank"></iframe>
+  </div>
+
   <!-- Health view -->
   <div id="healthView" class="health-view">
     <div class="health-card">
@@ -569,12 +579,14 @@ function showView(view, evt) {
   document.getElementById('dashboardView').style.display = view === 'dashboard' ? 'block' : 'none';
   document.getElementById('healthView').style.display = view === 'health' ? 'block' : 'none';
   document.getElementById('settingsView').style.display = view === 'settings' ? 'block' : 'none';
+  document.getElementById('docsView').style.display = view === 'docs' ? 'block' : 'none';
   if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
   else if (typeof event !== 'undefined' && event && event.currentTarget) event.currentTarget.classList.add('active');
-  const titles = { dashboard: '監控儀表板', health: '健康檢查', settings: '設定' };
+  const titles = { dashboard: '監控儀表板', health: '健康檢查', settings: '設定', docs: 'API 文件' };
   document.getElementById('pageTitle').textContent = titles[view] || view;
   if (view === 'health') loadHealth();
   if (view === 'settings') { loadSettings(); loadEmailLogs(); }
+  if (view === 'docs') { document.getElementById('docsFrame').src = '/docs'; }
 }
 
 const DEFAULT_FIELDS = 'store_name,consumer_phone,order_time';
@@ -817,13 +829,13 @@ if ('serviceWorker' in navigator) {
       </svg>
       設定
     </div>
-    <a class="bottom-tab" href="/docs" target="_blank">
+    <div class="bottom-tab" onclick="showTab('docs', this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
         <polyline points="14 2 14 8 20 8"/>
       </svg>
       文件
-    </a>
+    </div>
   </div>
 </nav>
 </body>
