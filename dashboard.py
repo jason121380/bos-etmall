@@ -202,6 +202,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .badge-success { background: rgba(21,190,83,0.12); color: #108c3d; border: 1px solid rgba(21,190,83,0.3); }
   .badge-neutral { background: #f6f9fc; color: #64748d; border: 1px solid #e5edf5; }
 
+  .delete-btn {
+    background: transparent; border: 1px solid #e5edf5; color: #94a3b8;
+    width: 26px; height: 26px; border-radius: 4px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .delete-btn:hover { border-color: #ea2261; color: #ea2261; background: rgba(234,34,97,0.05); }
+  .delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
   .empty { text-align: center; padding: 48px; color: #64748d; font-size: 13px; }
 
   /* Stores */
@@ -418,11 +427,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <thead>
             <tr>
               <th>接收時間</th><th>店家</th><th>消費者</th>
-              <th>手機</th><th>金額</th><th>狀態</th><th>訂單時間</th><th>Sheet</th><th>訂單編號</th>
+              <th>手機</th><th>金額</th><th>狀態</th><th>訂單時間</th><th>Sheet</th><th>訂單編號</th><th></th>
             </tr>
           </thead>
           <tbody id="ordersBody">
-            <tr><td colspan="9" class="empty">載入中...</td></tr>
+            <tr><td colspan="10" class="empty">載入中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -666,6 +675,19 @@ async function sendTodayReport() {
   } catch(e) { alert('發送失敗'); }
 }
 
+async function deleteOrder(orderId, btn) {
+  if (!confirm(`確定要刪除訂單 ${orderId} 嗎？此動作無法復原。`)) return;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/admin/orders/' + encodeURIComponent(orderId), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) { alert('刪除失敗：' + (d.detail || JSON.stringify(d))); if (btn) btn.disabled = false; return; }
+    const row = btn && btn.closest('tr');
+    if (row) row.remove();
+    loadData();
+  } catch(e) { alert('刪除失敗'); if (btn) btn.disabled = false; }
+}
+
 async function sendTestReport() {
   if (!confirm('確定要發送測試信？')) return;
   try {
@@ -756,7 +778,7 @@ async function loadData() {
 
     const tbody = document.getElementById('ordersBody');
     if (orders.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty">尚無訂單資料</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="empty">尚無訂單資料</td></tr>';
     } else {
       tbody.innerHTML = orders.slice(0,50).map(o => `
         <tr>
@@ -771,6 +793,16 @@ async function loadData() {
             ? '<span class="badge badge-success">✓ 已同步</span>'
             : '<span class="badge badge-neutral">—</span>'}</td>
           <td><span class="order-id">${o.order_id}</span></td>
+          <td>
+            <button class="delete-btn" onclick="deleteOrder('${o.order_id.replace(/'/g, "\\\\'")}', this)" title="刪除訂單">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/>
+                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </td>
         </tr>`).join('');
     }
 
