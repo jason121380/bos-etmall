@@ -19,7 +19,7 @@ from config import settings
 from dashboard import DASHBOARD_HTML
 from database import Base, engine, get_db
 from email_service import send_daily_report
-from sheets import sync_order_to_sheet
+from sheets import mark_order_deleted_in_sheet, sync_order_to_sheet
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -375,14 +375,24 @@ def receive_order(
 
 @app.delete("/admin/orders/{order_id}", tags=["後台管理"], summary="刪除單筆訂單")
 def delete_order(order_id: str, db: Session = Depends(get_db)):
-    """依 `order_id` 從資料庫永久刪除單筆訂單，用於清理測試資料。"""
+    """
+    依 `order_id` 從資料庫永久刪除單筆訂單，用於清理測試資料。
+
+    若該訂單已同步 Google Sheet，Sheet 上對應列不會被刪除，
+    而是將「訂單狀態」欄標記為「已刪除」。
+    """
     row = db.query(models.Order).filter(models.Order.order_id == order_id).first()
     if not row:
         raise HTTPException(status_code=404, detail=f"Order not found: {order_id}")
+
+    sheet_marked = False
+    if settings.sheets_enabled and row.synced_to_sheet:
+        sheet_marked = mark_order_deleted_in_sheet(order_id)
+
     db.delete(row)
     db.commit()
-    logger.info(f"Order deleted: {order_id}")
-    return {"status": "ok", "order_id": order_id}
+    logger.info(f"Order deleted: {order_id} (sheet_marked={sheet_marked})")
+    return {"status": "ok", "order_id": order_id, "sheet_marked": sheet_marked}
 
 
 @app.post("/admin/orders/bulk-delete", tags=["後台管理"], summary="批次刪除訂單")
@@ -394,18 +404,29 @@ def bulk_delete_orders(data: dict, db: Session = Depends(get_db)):
     ```json
     { "order_ids": ["POS-001", "POS-002"] }
     ```
+
+    已同步 Google Sheet 的訂單，Sheet 上對應列會被標記為「已刪除」而非移除。
     """
     ids = data.get("order_ids") or []
     if not isinstance(ids, list) or not ids:
         raise HTTPException(status_code=400, detail="order_ids 必須為非空陣列")
+
+    rows = db.query(models.Order).filter(models.Order.order_id.in_(ids)).all()
+
+    sheet_marked = 0
+    if settings.sheets_enabled:
+        for r in rows:
+            if r.synced_to_sheet and mark_order_deleted_in_sheet(r.order_id):
+                sheet_marked += 1
+
     deleted = (
         db.query(models.Order)
         .filter(models.Order.order_id.in_(ids))
         .delete(synchronize_session=False)
     )
     db.commit()
-    logger.info(f"Bulk deleted {deleted} orders")
-    return {"status": "ok", "deleted": deleted}
+    logger.info(f"Bulk deleted {deleted} orders (sheet_marked={sheet_marked})")
+    return {"status": "ok", "deleted": deleted, "sheet_marked": sheet_marked}
 
 
 @app.get("/orders", response_model=list[schemas.OrderOut], tags=["訂單查詢"], summary="查詢訂單列表")

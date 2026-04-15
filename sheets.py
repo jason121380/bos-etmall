@@ -51,3 +51,23 @@ def sync_order_to_sheet(order) -> bool:
     except Exception as e:
         logger.error(f"Google Sheets sync failed: {e}")
         return False
+
+
+def mark_order_deleted_in_sheet(order_id: str) -> bool:
+    """
+    將 Google Sheet 中對應 order_id 的列「訂單狀態」欄位標記為「已刪除」，
+    不會真的刪除列。若找不到訂單編號則回傳 False。
+    """
+    try:
+        sheet = get_sheet()
+        # 訂單編號在第 1 欄
+        cell = sheet.find(order_id, in_column=1)
+        if not cell:
+            logger.warning(f"Order {order_id} not found in sheet")
+            return False
+        # 訂單狀態在第 7 欄（見 SHEET_HEADERS）
+        sheet.update_cell(cell.row, 7, "已刪除")
+        return True
+    except Exception as e:
+        logger.error(f"Google Sheets mark deleted failed for {order_id}: {e}")
+        return False
