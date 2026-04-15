@@ -571,7 +571,24 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
 <script>
 const fmt = n => new Intl.NumberFormat('zh-TW').format(n);
-const fmtDate = s => s ? new Date(s).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+// 後端回傳的 naive datetime 視為 UTC，統一轉台北時區
+const parseDate = s => {
+  if (!s) return null;
+  const hasTZ = /[zZ]|[+-]\\d{2}:?\\d{2}$/.test(s);
+  return new Date(hasTZ ? s : s + 'Z');
+};
+const fmtDate = s => {
+  const d = parseDate(s);
+  if (!d) return '—';
+  return d.toLocaleString('zh-TW', {
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'Asia/Taipei', hour12: false
+  });
+};
+// 取得台北時區的 YYYY-MM-DD / YYYY-MM 字串
+const taipeiYMD = d => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
+const taipeiYM  = d => taipeiYMD(d).slice(0, 7);
 
 function showView(view, evt) {
   if (evt !== undefined && evt !== null) closeSidebar();
@@ -672,7 +689,7 @@ async function loadEmailLogs() {
       return;
     }
     body.innerHTML = logs.map(l => {
-      const t = l.sent_at ? new Date(l.sent_at).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+      const t = fmtDate(l.sent_at);
       const statusBadge = l.status === 'ok'
         ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:11px;">成功</span>'
         : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:11px;" title="' + (l.error||'') + '">失敗</span>';
@@ -716,11 +733,16 @@ async function loadData() {
     document.getElementById('sidebarTime').textContent = '更新 ' + now;
     document.getElementById('lastUpdate').textContent = '最後更新：' + now;
 
-    const today_ = new Date();
-    const today = orders.filter(o => new Date(o.received_at).toDateString() === today_.toDateString());
+    const now_ = new Date();
+    const todayStr = taipeiYMD(now_);
+    const monthStr = taipeiYM(now_);
+    const today = orders.filter(o => {
+      const d = parseDate(o.received_at);
+      return d && taipeiYMD(d) === todayStr;
+    });
     const month = orders.filter(o => {
-      const d = new Date(o.received_at);
-      return d.getFullYear() === today_.getFullYear() && d.getMonth() === today_.getMonth();
+      const d = parseDate(o.received_at);
+      return d && taipeiYM(d) === monthStr;
     });
     const synced = orders.filter(o => o.synced_to_sheet);
 
