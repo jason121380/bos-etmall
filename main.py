@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import models
@@ -19,7 +20,7 @@ from config import settings
 from dashboard import DASHBOARD_HTML
 from database import Base, engine, get_db
 from email_service import send_daily_report
-from sheets import mark_order_deleted_in_sheet, sync_order_to_sheet
+from sheets import mark_order_deleted_in_sheet, restore_order_in_sheet, sync_order_to_sheet
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +45,8 @@ def run_daily_email():
             .filter(models.Order.received_at >= start)
             .filter(models.Order.received_at < end)
             .filter(models.Order.emailed == False)
+            .filter(models.Order.deleted_at.is_(None))
+            .order_by(models.Order.received_at.desc())
             .all()
         )
 
@@ -85,6 +88,19 @@ def run_daily_email():
 async def lifespan(app: FastAPI):
     # 建立資料表
     Base.metadata.create_all(bind=engine)
+
+    # Migration：為既有 orders 表補上 deleted_at 欄位（PostgreSQL 9.6+）
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE orders ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_orders_deleted_at ON orders (deleted_at)"
+            ))
+        logger.info("Migration ok: orders.deleted_at ensured")
+    except Exception as e:
+        logger.warning(f"Migration skipped or failed: {e}")
 
     # 啟動排程：每天 09:00 台北時間（僅在 Email 設定完成時啟用）
     if settings.email_enabled:
@@ -373,15 +389,20 @@ def receive_order(
     )
 
 
-@app.delete("/admin/orders/{order_id}", tags=["後台管理"], summary="刪除單筆訂單")
+@app.delete("/admin/orders/{order_id}", tags=["後台管理"], summary="刪除單筆訂單（軟刪除）")
 def delete_order(order_id: str, db: Session = Depends(get_db)):
     """
-    依 `order_id` 從資料庫永久刪除單筆訂單，用於清理測試資料。
+    將指定訂單移到垃圾桶（軟刪除）。資料會保留在資料庫中但不會出現在
+    `/orders`、Email 報表等一般查詢；可透過 `/admin/trash/{order_id}/restore` 復原。
 
     若該訂單已同步 Google Sheet，Sheet 上對應列不會被刪除，
     而是將「訂單狀態」欄標記為「已刪除」。
     """
-    row = db.query(models.Order).filter(models.Order.order_id == order_id).first()
+    row = (
+        db.query(models.Order)
+        .filter(models.Order.order_id == order_id, models.Order.deleted_at.is_(None))
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail=f"Order not found: {order_id}")
 
@@ -389,16 +410,16 @@ def delete_order(order_id: str, db: Session = Depends(get_db)):
     if settings.sheets_enabled and row.synced_to_sheet:
         sheet_marked = mark_order_deleted_in_sheet(order_id)
 
-    db.delete(row)
+    row.deleted_at = datetime.utcnow()
     db.commit()
-    logger.info(f"Order deleted: {order_id} (sheet_marked={sheet_marked})")
+    logger.info(f"Order soft-deleted: {order_id} (sheet_marked={sheet_marked})")
     return {"status": "ok", "order_id": order_id, "sheet_marked": sheet_marked}
 
 
-@app.post("/admin/orders/bulk-delete", tags=["後台管理"], summary="批次刪除訂單")
+@app.post("/admin/orders/bulk-delete", tags=["後台管理"], summary="批次刪除訂單（軟刪除）")
 def bulk_delete_orders(data: dict, db: Session = Depends(get_db)):
     """
-    批次刪除訂單。
+    批次將訂單移到垃圾桶（軟刪除）。
 
     **Request Body：**
     ```json
@@ -411,22 +432,80 @@ def bulk_delete_orders(data: dict, db: Session = Depends(get_db)):
     if not isinstance(ids, list) or not ids:
         raise HTTPException(status_code=400, detail="order_ids 必須為非空陣列")
 
-    rows = db.query(models.Order).filter(models.Order.order_id.in_(ids)).all()
+    rows = (
+        db.query(models.Order)
+        .filter(models.Order.order_id.in_(ids), models.Order.deleted_at.is_(None))
+        .all()
+    )
 
     sheet_marked = 0
-    if settings.sheets_enabled:
-        for r in rows:
-            if r.synced_to_sheet and mark_order_deleted_in_sheet(r.order_id):
+    now = datetime.utcnow()
+    for r in rows:
+        if settings.sheets_enabled and r.synced_to_sheet:
+            if mark_order_deleted_in_sheet(r.order_id):
                 sheet_marked += 1
+        r.deleted_at = now
 
-    deleted = (
-        db.query(models.Order)
-        .filter(models.Order.order_id.in_(ids))
-        .delete(synchronize_session=False)
-    )
     db.commit()
-    logger.info(f"Bulk deleted {deleted} orders (sheet_marked={sheet_marked})")
-    return {"status": "ok", "deleted": deleted, "sheet_marked": sheet_marked}
+    logger.info(f"Bulk soft-deleted {len(rows)} orders (sheet_marked={sheet_marked})")
+    return {"status": "ok", "deleted": len(rows), "sheet_marked": sheet_marked}
+
+
+@app.get("/admin/trash", response_model=list[schemas.OrderOut], tags=["後台管理"], summary="查詢垃圾桶")
+def get_trash(limit: int = 200, db: Session = Depends(get_db)):
+    """回傳所有已軟刪除的訂單，依 `deleted_at` 由新到舊排序。"""
+    return (
+        db.query(models.Order)
+        .filter(models.Order.deleted_at.isnot(None))
+        .order_by(models.Order.deleted_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+@app.post("/admin/trash/{order_id}/restore", tags=["後台管理"], summary="從垃圾桶復原訂單")
+def restore_order(order_id: str, db: Session = Depends(get_db)):
+    """
+    將已軟刪除的訂單還原（`deleted_at` 設為 NULL）。
+    若該訂單原本有同步 Google Sheet，Sheet 上的狀態欄也會從「已刪除」還原為原本的訂單狀態。
+    """
+    row = (
+        db.query(models.Order)
+        .filter(models.Order.order_id == order_id, models.Order.deleted_at.isnot(None))
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Deleted order not found: {order_id}")
+
+    row.deleted_at = None
+    db.commit()
+
+    sheet_restored = False
+    if settings.sheets_enabled and row.synced_to_sheet:
+        sheet_restored = restore_order_in_sheet(order_id, row.order_status)
+
+    logger.info(f"Order restored: {order_id} (sheet_restored={sheet_restored})")
+    return {"status": "ok", "order_id": order_id, "sheet_restored": sheet_restored}
+
+
+@app.delete("/admin/trash/{order_id}", tags=["後台管理"], summary="永久刪除訂單")
+def permanent_delete_order(order_id: str, db: Session = Depends(get_db)):
+    """
+    永久從資料庫刪除已在垃圾桶中的訂單，**此動作無法復原**。
+    Google Sheet 上的「已刪除」標記不會變動。
+    """
+    row = (
+        db.query(models.Order)
+        .filter(models.Order.order_id == order_id, models.Order.deleted_at.isnot(None))
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Deleted order not found: {order_id}")
+
+    db.delete(row)
+    db.commit()
+    logger.info(f"Order permanently deleted: {order_id}")
+    return {"status": "ok", "order_id": order_id}
 
 
 @app.get("/orders", response_model=list[schemas.OrderOut], tags=["訂單查詢"], summary="查詢訂單列表")
@@ -444,7 +523,7 @@ def list_orders(
     - `limit`：最多回傳幾筆（預設 100）
     - `store_id`：依店家編號篩選（選填）
     """
-    query = db.query(models.Order)
+    query = db.query(models.Order).filter(models.Order.deleted_at.is_(None))
     if store_id:
         query = query.filter(models.Order.store_id == store_id)
     return query.order_by(models.Order.received_at.desc()).offset(skip).limit(limit).all()
@@ -508,6 +587,8 @@ def send_today_report(db: Session = Depends(get_db)):
         db.query(models.Order)
         .filter(models.Order.received_at >= start)
         .filter(models.Order.received_at < end)
+        .filter(models.Order.deleted_at.is_(None))
+        .order_by(models.Order.received_at.desc())
         .all()
     )
 
@@ -561,6 +642,8 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
         db.query(models.Order)
         .filter(models.Order.received_at >= start_dt)
         .filter(models.Order.received_at < end_dt)
+        .filter(models.Order.deleted_at.is_(None))
+        .order_by(models.Order.received_at.desc())
         .all()
     )
 
@@ -645,7 +728,13 @@ def test_email(db: Session = Depends(get_db)):
     if not settings.ZEABUR_EMAIL_API_KEY:
         raise HTTPException(status_code=400, detail="ZEABUR_EMAIL_API_KEY not set")
 
-    orders = db.query(models.Order).order_by(models.Order.received_at.desc()).limit(5).all()
+    orders = (
+        db.query(models.Order)
+        .filter(models.Order.deleted_at.is_(None))
+        .order_by(models.Order.received_at.desc())
+        .limit(5)
+        .all()
+    )
     rows = "".join(
         f"<tr><td>{o.order_id}</td><td>{o.store_name or o.store_id}</td>"
         f"<td>{o.consumer_phone}</td><td>NT$ {o.amount:,.0f}</td></tr>"

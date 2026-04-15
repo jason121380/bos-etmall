@@ -2,11 +2,14 @@ import base64
 import csv
 import io
 import requests
-from datetime import date
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from config import settings
 import logging
 
 logger = logging.getLogger(__name__)
+
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 FIELD_LABELS = {
     "order_id":       "訂單編號",
@@ -20,16 +23,25 @@ FIELD_LABELS = {
     "received_at":    "接收時間",
 }
 
-DEFAULT_FIELDS = ["store_name", "consumer_phone", "order_time"]
+DEFAULT_FIELDS = ["store_name", "consumer_phone", "received_at"]
+
+
+def _to_taipei(dt):
+    """將資料庫中 naive UTC datetime 轉為台北時區。"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(TAIPEI_TZ)
 
 
 def get_field_value(order, field: str) -> str:
     if field == "amount":
         return f"NT$ {order.amount:,.0f}"
     if field == "order_time" and order.order_time:
-        return order.order_time.strftime("%Y-%m-%d %H:%M")
+        return _to_taipei(order.order_time).strftime("%Y-%m-%d %H:%M")
     if field == "received_at" and order.received_at:
-        return order.received_at.strftime("%Y-%m-%d %H:%M")
+        return _to_taipei(order.received_at).strftime("%Y-%m-%d %H:%M")
     if field == "store_name":
         return order.store_name or order.store_id or ""
     return str(getattr(order, field, "") or "")
