@@ -426,12 +426,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <table>
           <thead>
             <tr>
-              <th>接收時間</th><th>店家</th><th>消費者</th>
+              <th>No.</th><th>接收時間</th><th>店家</th><th>消費者</th>
               <th>手機</th><th>金額</th><th>狀態</th><th>訂單時間</th><th>Sheet</th><th>訂單編號</th><th></th>
             </tr>
           </thead>
           <tbody id="ordersBody">
-            <tr><td colspan="10" class="empty">載入中...</td></tr>
+            <tr><td colspan="11" class="empty">載入中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -778,10 +778,11 @@ async function loadData() {
 
     const tbody = document.getElementById('ordersBody');
     if (orders.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="empty">尚無訂單資料</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">尚無訂單資料</td></tr>';
     } else {
-      tbody.innerHTML = orders.slice(0,50).map(o => `
+      tbody.innerHTML = orders.slice(0,50).map((o, i) => `
         <tr>
+          <td style="color:#94a3b8;font-variant-numeric:tabular-nums;">${i + 1}</td>
           <td style="font-size:12px;color:#64748d;">${fmtDate(o.received_at)}</td>
           <td>${o.store_name || o.store_id}</td>
           <td>${o.consumer_name || '—'}</td>
