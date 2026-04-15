@@ -71,3 +71,21 @@ def mark_order_deleted_in_sheet(order_id: str) -> bool:
     except Exception as e:
         logger.error(f"Google Sheets mark deleted failed for {order_id}: {e}")
         return False
+
+
+def restore_order_in_sheet(order_id: str, status: str) -> bool:
+    """
+    將 Google Sheet 中對應 order_id 的列「訂單狀態」欄位還原為原本狀態，
+    用於從垃圾桶復原。若找不到訂單編號則回傳 False。
+    """
+    try:
+        sheet = get_sheet()
+        cell = sheet.find(order_id, in_column=1)
+        if not cell:
+            logger.warning(f"Order {order_id} not found in sheet (restore)")
+            return False
+        sheet.update_cell(cell.row, 7, status)
+        return True
+    except Exception as e:
+        logger.error(f"Google Sheets restore failed for {order_id}: {e}")
+        return False

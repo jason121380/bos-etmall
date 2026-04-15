@@ -211,6 +211,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .delete-btn:hover { border-color: #ea2261; color: #ea2261; background: rgba(234,34,97,0.05); }
   .delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  .restore-btn {
+    background: transparent; border: 1px solid #e5edf5; color: #64748d;
+    padding: 4px 10px; border-radius: 4px; font-size: 11px; font-family: inherit;
+    cursor: pointer; margin-right: 6px; transition: all 0.15s;
+  }
+  .restore-btn:hover { border-color: #108c3d; color: #108c3d; background: rgba(21,190,83,0.05); }
+  .restore-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
   .empty { text-align: center; padding: 48px; color: #64748d; font-size: 13px; }
 
   /* Stores */
@@ -229,8 +237,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .store-count { font-size: 20px; font-weight: 300; color: #533afd; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
   .store-amount { font-size: 11px; color: #64748d; margin-top: 2px; }
 
-  /* Settings & Health & Docs view */
-  .settings-view, .health-view, .docs-view { padding: 0; display: none; }
+  /* Settings & Health & Docs & Trash view */
+  .settings-view, .health-view, .docs-view, .trash-view { padding: 0; display: none; }
+  .trash-view { padding: 28px; }
   .docs-view { height: calc(100vh - 52px); }
   .docs-view iframe { width: 100%; height: 100%; border: none; }
   @media (max-width: 768px) {
@@ -339,6 +348,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           </svg>
         </span>
         <span>健康檢查</span>
+      </a>
+      <a class="nav-item" onclick="showView('trash')">
+        <span class="nav-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </span>
+        <span>垃圾桶</span>
+        <span id="trashBadge" style="margin-left:auto;background:#f6f9fc;color:#64748d;border-radius:10px;font-size:10px;padding:1px 7px;display:none;"></span>
       </a>
       <a class="nav-item" onclick="showView('settings')">
         <span class="nav-icon">
@@ -562,6 +583,29 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Trash view -->
+  <div id="trashView" class="trash-view">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">垃圾桶 — 已刪除訂單</span>
+        <span id="trashCountText" style="font-size:12px;color:#64748d;">—</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th><th>刪除時間</th><th>接收時間</th><th>店家</th><th>消費者</th>
+              <th>手機</th><th>金額</th><th>原狀態</th><th>訂單編號</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="trashBody">
+            <tr><td colspan="10" class="empty">載入中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- Docs view -->
   <div id="docsView" class="docs-view">
     <iframe id="docsFrame" src="about:blank"></iframe>
@@ -605,13 +649,15 @@ function showView(view, evt) {
   document.getElementById('dashboardView').style.display = view === 'dashboard' ? 'block' : 'none';
   document.getElementById('healthView').style.display = view === 'health' ? 'block' : 'none';
   document.getElementById('settingsView').style.display = view === 'settings' ? 'block' : 'none';
+  document.getElementById('trashView').style.display = view === 'trash' ? 'block' : 'none';
   document.getElementById('docsView').style.display = view === 'docs' ? 'block' : 'none';
   if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
   else if (typeof event !== 'undefined' && event && event.currentTarget) event.currentTarget.classList.add('active');
-  const titles = { dashboard: '監控儀表板', health: '健康檢查', settings: '設定', docs: 'API 文件' };
+  const titles = { dashboard: '監控儀表板', health: '健康檢查', settings: '設定', trash: '垃圾桶', docs: 'API 文件' };
   document.getElementById('pageTitle').textContent = titles[view] || view;
   if (view === 'health') loadHealth();
   if (view === 'settings') { loadSettings(); loadEmailLogs(); }
+  if (view === 'trash') loadTrash();
   if (view === 'docs') { document.getElementById('docsFrame').src = '/docs'; }
 }
 
@@ -676,7 +722,7 @@ async function sendTodayReport() {
 }
 
 async function deleteOrder(orderId, btn) {
-  if (!confirm(`確定要刪除訂單 ${orderId} 嗎？此動作無法復原。`)) return;
+  if (!confirm(`確定要刪除訂單 ${orderId} 嗎？\\n（會移到垃圾桶，可在垃圾桶復原）`)) return;
   if (btn) btn.disabled = true;
   try {
     const r = await fetch('/admin/orders/' + encodeURIComponent(orderId), { method: 'DELETE' });
@@ -685,6 +731,73 @@ async function deleteOrder(orderId, btn) {
     const row = btn && btn.closest('tr');
     if (row) row.remove();
     loadData();
+  } catch(e) { alert('刪除失敗'); if (btn) btn.disabled = false; }
+}
+
+async function loadTrash() {
+  try {
+    const trash = await fetch('/admin/trash').then(r => r.json());
+    document.getElementById('trashCountText').textContent = `共 ${trash.length} 筆`;
+    const badge = document.getElementById('trashBadge');
+    if (trash.length > 0) { badge.textContent = trash.length; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+    const tbody = document.getElementById('trashBody');
+    if (trash.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="empty">垃圾桶是空的</td></tr>';
+      return;
+    }
+    tbody.innerHTML = trash.map((o, i) => {
+      const safeId = o.order_id.replace(/'/g, "\\\\'");
+      return `
+        <tr>
+          <td style="color:#94a3b8;font-variant-numeric:tabular-nums;">${i + 1}</td>
+          <td style="font-size:12px;color:#64748d;">${fmtDate(o.deleted_at)}</td>
+          <td style="font-size:12px;color:#64748d;">${fmtDate(o.received_at)}</td>
+          <td>${o.store_name || o.store_id}</td>
+          <td>${o.consumer_name || '—'}</td>
+          <td>${o.consumer_phone}</td>
+          <td class="amount">NT$ ${fmt(o.amount)}</td>
+          <td><span class="badge badge-neutral">${o.order_status}</span></td>
+          <td><span class="order-id">${o.order_id}</span></td>
+          <td style="white-space:nowrap;">
+            <button class="restore-btn" onclick="restoreOrder('${safeId}', this)">復原</button>
+            <button class="delete-btn" onclick="permanentDelete('${safeId}', this)" title="永久刪除">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/>
+                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('trashBody').innerHTML =
+      '<tr><td colspan="10" class="empty">載入失敗</td></tr>';
+  }
+}
+
+async function restoreOrder(orderId, btn) {
+  if (!confirm(`確定要復原訂單 ${orderId}？`)) return;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(`/admin/trash/${encodeURIComponent(orderId)}/restore`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) { alert('復原失敗：' + (d.detail || JSON.stringify(d))); if (btn) btn.disabled = false; return; }
+    loadTrash();
+    loadData();
+  } catch(e) { alert('復原失敗'); if (btn) btn.disabled = false; }
+}
+
+async function permanentDelete(orderId, btn) {
+  if (!confirm(`⚠️ 確定要「永久刪除」${orderId}？\\n此動作無法復原！`)) return;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(`/admin/trash/${encodeURIComponent(orderId)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) { alert('刪除失敗：' + (d.detail || JSON.stringify(d))); if (btn) btn.disabled = false; return; }
+    loadTrash();
   } catch(e) { alert('刪除失敗'); if (btn) btn.disabled = false; }
 }
 
@@ -835,8 +948,19 @@ async function loadData() {
   }
 }
 
+async function refreshTrashBadge() {
+  try {
+    const trash = await fetch('/admin/trash?limit=1000').then(r => r.json());
+    const badge = document.getElementById('trashBadge');
+    if (trash.length > 0) { badge.textContent = trash.length; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  } catch(e) {}
+}
+
 loadData();
+refreshTrashBadge();
 setInterval(loadData, 30000);
+setInterval(refreshTrashBadge, 60000);
 
 // ── Sidebar mobile toggle ──
 function toggleSidebar() {

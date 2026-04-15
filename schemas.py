@@ -28,6 +28,7 @@ class OrderOut(BaseModel):
     received_at: datetime
     emailed: bool
     synced_to_sheet: bool
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

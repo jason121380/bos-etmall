@@ -37,3 +37,4 @@ class Order(Base):
     received_at = Column(DateTime, server_default=func.now())  # 接收時間
     emailed = Column(Boolean, default=False)             # 是否已發過 email
     synced_to_sheet = Column(Boolean, default=False)     # 是否已同步 Google Sheet
+    deleted_at = Column(DateTime, nullable=True, index=True)   # 軟刪除時間；NULL 表示未刪除
