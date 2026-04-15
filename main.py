@@ -373,6 +373,41 @@ def receive_order(
     )
 
 
+@app.delete("/admin/orders/{order_id}", tags=["後台管理"], summary="刪除單筆訂單")
+def delete_order(order_id: str, db: Session = Depends(get_db)):
+    """依 `order_id` 從資料庫永久刪除單筆訂單，用於清理測試資料。"""
+    row = db.query(models.Order).filter(models.Order.order_id == order_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Order not found: {order_id}")
+    db.delete(row)
+    db.commit()
+    logger.info(f"Order deleted: {order_id}")
+    return {"status": "ok", "order_id": order_id}
+
+
+@app.post("/admin/orders/bulk-delete", tags=["後台管理"], summary="批次刪除訂單")
+def bulk_delete_orders(data: dict, db: Session = Depends(get_db)):
+    """
+    批次刪除訂單。
+
+    **Request Body：**
+    ```json
+    { "order_ids": ["POS-001", "POS-002"] }
+    ```
+    """
+    ids = data.get("order_ids") or []
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=400, detail="order_ids 必須為非空陣列")
+    deleted = (
+        db.query(models.Order)
+        .filter(models.Order.order_id.in_(ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    logger.info(f"Bulk deleted {deleted} orders")
+    return {"status": "ok", "deleted": deleted}
+
+
 @app.get("/orders", response_model=list[schemas.OrderOut], tags=["訂單查詢"], summary="查詢訂單列表")
 def list_orders(
     skip: int = 0,
