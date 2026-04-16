@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pathlib import Path
@@ -28,7 +29,19 @@ logger = logging.getLogger(__name__)
 # 訂單狀態白名單（POS 系統可能用不同詞）
 VALID_STATUSES = {"completed", "paid", "confirmed", "success", "done"}
 
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+
 scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
+
+
+def taipei_day_to_utc_range(d: date) -> tuple:
+    """將台北時區的某天轉成 naive UTC 的 (start, end) datetime，用於查 DB。"""
+    start_tp = datetime(d.year, d.month, d.day, tzinfo=TAIPEI_TZ)
+    end_tp = start_tp + timedelta(days=1)
+    return (
+        start_tp.astimezone(timezone.utc).replace(tzinfo=None),
+        end_tp.astimezone(timezone.utc).replace(tzinfo=None),
+    )
 
 
 def run_daily_email():
@@ -36,9 +49,9 @@ def run_daily_email():
     from database import SessionLocal
     db = SessionLocal()
     try:
-        yesterday = date.today() - timedelta(days=1)
-        start = datetime.combine(yesterday, datetime.min.time())
-        end = datetime.combine(date.today(), datetime.min.time())
+        now_taipei = datetime.now(TAIPEI_TZ)
+        yesterday = (now_taipei - timedelta(days=1)).date()
+        start, end = taipei_day_to_utc_range(yesterday)
 
         new_orders = (
             db.query(models.Order)
@@ -75,7 +88,7 @@ def run_daily_email():
     except Exception as e:
         logger.error(f"Daily email job failed: {e}")
         try:
-            db.add(models.EmailLog(trigger="schedule", date_range=str(date.today() - timedelta(days=1)),
+            db.add(models.EmailLog(trigger="schedule", date_range=str(yesterday),
                                    order_count=0, recipients="", status="error", error=str(e)))
             db.commit()
         except Exception:
@@ -578,10 +591,9 @@ def trigger_report_now(db: Session = Depends(get_db)):
 
 @app.post("/admin/send-today-report", tags=["後台管理"], summary="立即發送今日報表")
 def send_today_report(db: Session = Depends(get_db)):
-    """立即發送今日（當天）所有訂單的正式報表，含 CSV 附件。"""
-    today = date.today()
-    start = datetime.combine(today, datetime.min.time())
-    end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+    """立即發送今日（當天，台北時間）所有訂單的正式報表，含 CSV 附件。"""
+    today = datetime.now(TAIPEI_TZ).date()
+    start, end = taipei_day_to_utc_range(today)
 
     orders = (
         db.query(models.Order)
@@ -635,8 +647,8 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
     if end < start:
         raise HTTPException(status_code=400, detail="結束日期不能早於開始日期")
 
-    start_dt = datetime.combine(start, datetime.min.time())
-    end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
+    start_dt, _ = taipei_day_to_utc_range(start)
+    _, end_dt = taipei_day_to_utc_range(end)
 
     orders = (
         db.query(models.Order)
