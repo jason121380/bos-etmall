@@ -521,25 +521,91 @@ def permanent_delete_order(order_id: str, db: Session = Depends(get_db)):
     return {"status": "ok", "order_id": order_id}
 
 
-@app.get("/orders", response_model=list[schemas.OrderOut], tags=["訂單查詢"], summary="查詢訂單列表")
+@app.get("/orders", tags=["訂單查詢"], summary="查詢訂單列表")
 def list_orders(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 50,
     store_id: str = None,
+    date: str = None,
     db: Session = Depends(get_db),
 ):
     """
-    查詢已儲存的訂單，支援分頁與店家篩選。
+    查詢已儲存的訂單，支援分頁、店家篩選、日期篩選。
 
     **參數說明：**
     - `skip`：跳過前幾筆（預設 0）
-    - `limit`：最多回傳幾筆（預設 100）
+    - `limit`：最多回傳幾筆（預設 50）
     - `store_id`：依店家編號篩選（選填）
+    - `date`：依日期篩選（台北時區 `YYYY-MM-DD`，選填）
+
+    **回傳：** `{ "orders": [...], "total": N }`
     """
     query = db.query(models.Order).filter(models.Order.deleted_at.is_(None))
     if store_id:
         query = query.filter(models.Order.store_id == store_id)
-    return query.order_by(models.Order.received_at.desc()).offset(skip).limit(limit).all()
+    if date:
+        try:
+            d = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="日期格式錯誤，請使用 YYYY-MM-DD")
+        start, end = taipei_day_to_utc_range(d)
+        query = query.filter(models.Order.received_at >= start, models.Order.received_at < end)
+
+    total = query.count()
+    orders = query.order_by(models.Order.received_at.desc()).offset(skip).limit(limit).all()
+
+    return {
+        "orders": [schemas.OrderOut.model_validate(o).model_dump() for o in orders],
+        "total": total,
+    }
+
+
+@app.get("/admin/stats", tags=["後台管理"], summary="儀表板統計資料")
+def get_stats(db: Session = Depends(get_db)):
+    """回傳今日/本月/累計訂單統計、已同步筆數、店家分布（全部由伺服器端以台北時區計算）。"""
+    from sqlalchemy import func as F
+
+    base = db.query(models.Order).filter(models.Order.deleted_at.is_(None))
+
+    now_taipei = datetime.now(TAIPEI_TZ)
+    today = now_taipei.date()
+    month_start = today.replace(day=1)
+
+    today_start, today_end = taipei_day_to_utc_range(today)
+    month_start_utc, _ = taipei_day_to_utc_range(month_start)
+
+    today_q = base.filter(models.Order.received_at >= today_start, models.Order.received_at < today_end)
+    month_q = base.filter(models.Order.received_at >= month_start_utc, models.Order.received_at < today_end)
+
+    total_count = base.count()
+    total_amount = base.with_entities(F.coalesce(F.sum(models.Order.amount), 0)).scalar()
+    synced_count = base.filter(models.Order.synced_to_sheet == True).count()
+
+    store_label = F.coalesce(models.Order.store_name, models.Order.store_id)
+    stores = (
+        base.with_entities(
+            store_label.label("name"),
+            F.count().label("count"),
+            F.sum(models.Order.amount).label("amount"),
+        )
+        .group_by(store_label)
+        .order_by(F.count().desc())
+        .all()
+    )
+
+    return {
+        "today": {
+            "count": today_q.count(),
+            "amount": today_q.with_entities(F.coalesce(F.sum(models.Order.amount), 0)).scalar(),
+        },
+        "month": {
+            "count": month_q.count(),
+            "amount": month_q.with_entities(F.coalesce(F.sum(models.Order.amount), 0)).scalar(),
+        },
+        "total": {"count": total_count, "amount": total_amount},
+        "synced": synced_count,
+        "stores": [{"name": s.name or "—", "count": s.count, "amount": float(s.amount or 0)} for s in stores],
+    }
 
 
 @app.get("/admin/settings", tags=["後台管理"], summary="取得後台設定")

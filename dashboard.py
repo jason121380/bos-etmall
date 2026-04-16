@@ -221,21 +221,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
   .empty { text-align: center; padding: 48px; color: #64748d; font-size: 13px; }
 
-  /* Stores */
-  .stores-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 10px;
-    padding: 18px;
+  /* Pager */
+  .pager {
+    padding: 12px 20px;
+    border-top: 1px solid #e5edf5;
+    display: flex; align-items: center; justify-content: center; gap: 16px;
   }
-  .store-card {
-    background: #f8fafc; border: 1px solid #e5edf5; border-radius: 5px;
-    padding: 12px 14px; text-align: center; transition: all 0.15s;
+  .pager button {
+    background: transparent; border: 1px solid #e5edf5; border-radius: 4px;
+    padding: 5px 14px; font-size: 12px; font-family: inherit; color: #273951;
+    cursor: pointer; transition: all 0.15s;
   }
-  .store-card:hover { background: #fff; }
-  .store-name { font-size: 12px; color: #64748d; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .store-count { font-size: 20px; font-weight: 300; color: #533afd; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
-  .store-amount { font-size: 11px; color: #64748d; margin-top: 2px; }
+  .pager button:hover:not(:disabled) { border-color: #533afd; color: #533afd; }
+  .pager button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .pager span { font-size: 12px; color: #64748d; }
+
+  /* Stores (table handled by shared table styles) */
 
   /* Settings & Health & Docs & Trash view */
   .settings-view, .health-view, .docs-view, .trash-view { padding: 0; display: none; }
@@ -442,6 +443,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="panel">
       <div class="panel-header">
         <span class="panel-title">最新訂單</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="date" id="orderDateFilter"
+            style="border:1px solid #e5edf5;border-radius:4px;padding:5px 8px;font-family:inherit;font-size:12px;color:#061b31;outline:none;"
+            onfocus="this.style.borderColor='#533afd'" onblur="this.style.borderColor='#e5edf5'"
+            onchange="currentPage=0;loadOrders()">
+          <button onclick="document.getElementById('orderDateFilter').value='';currentPage=0;loadOrders()"
+            style="background:transparent;border:1px solid #e5edf5;border-radius:4px;padding:5px 10px;font-size:12px;font-family:inherit;color:#64748d;cursor:pointer;">全部</button>
+        </div>
       </div>
       <div class="table-scroll">
         <table>
@@ -456,14 +465,26 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           </tbody>
         </table>
       </div>
+      <div class="pager" id="pager" style="display:none;">
+        <button id="prevBtn" onclick="prevPage()">← 上一頁</button>
+        <span id="pageInfo"></span>
+        <button id="nextBtn" onclick="nextPage()">下一頁 →</button>
+      </div>
     </div>
 
     <div class="panel">
       <div class="panel-header">
         <span class="panel-title">店家分布</span>
       </div>
-      <div class="stores-grid" id="storesGrid">
-        <div style="padding:16px;color:#64748d;font-size:13px;">載入中...</div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>No.</th><th>店家</th><th>訂單數</th><th>金額</th></tr>
+          </thead>
+          <tbody id="storesBody">
+            <tr><td colspan="4" class="empty">載入中...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -730,7 +751,7 @@ async function deleteOrder(orderId, btn) {
     if (!r.ok) { alert('刪除失敗：' + (d.detail || JSON.stringify(d))); if (btn) btn.disabled = false; return; }
     const row = btn && btn.closest('tr');
     if (row) row.remove();
-    loadData();
+    loadStats(); loadOrders();
   } catch(e) { alert('刪除失敗'); if (btn) btn.disabled = false; }
 }
 
@@ -786,7 +807,7 @@ async function restoreOrder(orderId, btn) {
     const d = await r.json();
     if (!r.ok) { alert('復原失敗：' + (d.detail || JSON.stringify(d))); if (btn) btn.disabled = false; return; }
     loadTrash();
-    loadData();
+    loadStats(); loadOrders();
   } catch(e) { alert('復原失敗'); if (btn) btn.disabled = false; }
 }
 
@@ -854,11 +875,30 @@ async function loadHealth() {
   }
 }
 
-async function loadData() {
+// ── 分頁狀態 ──
+const PAGE_SIZE = 50;
+let currentPage = 0;
+let totalOrders = 0;
+
+function prevPage() { if (currentPage > 0) { currentPage--; loadOrders(); } }
+function nextPage() { if ((currentPage + 1) * PAGE_SIZE < totalOrders) { currentPage++; loadOrders(); } }
+
+function updatePager() {
+  const pager = document.getElementById('pager');
+  if (totalOrders <= PAGE_SIZE) { pager.style.display = 'none'; return; }
+  pager.style.display = 'flex';
+  const totalPages = Math.ceil(totalOrders / PAGE_SIZE);
+  document.getElementById('pageInfo').textContent = `第 ${currentPage + 1} / ${totalPages} 頁（共 ${totalOrders} 筆）`;
+  document.getElementById('prevBtn').disabled = currentPage === 0;
+  document.getElementById('nextBtn').disabled = (currentPage + 1) >= totalPages;
+}
+
+// ── 統計 + 店家分布 ──
+async function loadStats() {
   try {
-    const [health, orders] = await Promise.all([
+    const [health, stats] = await Promise.all([
       fetch('/health').then(r => r.json()),
-      fetch('/orders?limit=200').then(r => r.json())
+      fetch('/admin/stats').then(r => r.json())
     ]);
 
     const sp = document.getElementById('sidebarStatus');
@@ -868,34 +908,54 @@ async function loadData() {
     document.getElementById('sidebarTime').textContent = '更新 ' + now;
     document.getElementById('lastUpdate').textContent = '最後更新：' + now;
 
-    const now_ = new Date();
-    const todayStr = taipeiYMD(now_);
-    const monthStr = taipeiYM(now_);
-    const today = orders.filter(o => {
-      const d = parseDate(o.received_at);
-      return d && taipeiYMD(d) === todayStr;
-    });
-    const month = orders.filter(o => {
-      const d = parseDate(o.received_at);
-      return d && taipeiYM(d) === monthStr;
-    });
-    const synced = orders.filter(o => o.synced_to_sheet);
+    document.getElementById('todayCount').textContent = stats.today.count;
+    document.getElementById('todayAmount').textContent = 'NT$ ' + fmt(stats.today.amount);
+    document.getElementById('monthCount').textContent = stats.month.count;
+    document.getElementById('monthAmount').textContent = 'NT$ ' + fmt(stats.month.amount);
+    document.getElementById('totalCount').textContent = stats.total.count;
+    document.getElementById('totalAmount').textContent = 'NT$ ' + fmt(stats.total.amount);
+    document.getElementById('syncedCount').textContent = stats.synced;
 
-    document.getElementById('todayCount').textContent = today.length;
-    document.getElementById('todayAmount').textContent = 'NT$ ' + fmt(today.reduce((s,o)=>s+o.amount,0));
-    document.getElementById('monthCount').textContent = month.length;
-    document.getElementById('monthAmount').textContent = 'NT$ ' + fmt(month.reduce((s,o)=>s+o.amount,0));
-    document.getElementById('totalCount').textContent = orders.length;
-    document.getElementById('totalAmount').textContent = 'NT$ ' + fmt(orders.reduce((s,o)=>s+o.amount,0));
-    document.getElementById('syncedCount').textContent = synced.length;
+    // 店家分布（表格）
+    const storesBody = document.getElementById('storesBody');
+    if (!stats.stores || stats.stores.length === 0) {
+      storesBody.innerHTML = '<tr><td colspan="4" class="empty">尚無資料</td></tr>';
+    } else {
+      storesBody.innerHTML = stats.stores.map((s, i) => `
+        <tr>
+          <td style="color:#94a3b8;font-variant-numeric:tabular-nums;">${i + 1}</td>
+          <td>${s.name}</td>
+          <td style="color:#533afd;font-weight:500;font-variant-numeric:tabular-nums;">${s.count}</td>
+          <td class="amount">NT$ ${fmt(s.amount)}</td>
+        </tr>`).join('');
+    }
+
+  } catch(e) {
+    const sp = document.getElementById('sidebarStatus');
+    sp.className = 'status-pill offline';
+    document.getElementById('sidebarStatusText').textContent = 'API 離線';
+  }
+}
+
+// ── 訂單列表（分頁 + 日期篩選）──
+async function loadOrders() {
+  const dateVal = document.getElementById('orderDateFilter').value;
+  const skip = currentPage * PAGE_SIZE;
+  let url = `/orders?skip=${skip}&limit=${PAGE_SIZE}`;
+  if (dateVal) url += `&date=${dateVal}`;
+
+  try {
+    const data = await fetch(url).then(r => r.json());
+    const orders = data.orders;
+    totalOrders = data.total;
 
     const tbody = document.getElementById('ordersBody');
     if (orders.length === 0) {
       tbody.innerHTML = '<tr><td colspan="11" class="empty">尚無訂單資料</td></tr>';
     } else {
-      tbody.innerHTML = orders.slice(0,50).map((o, i) => `
+      tbody.innerHTML = orders.map((o, i) => `
         <tr>
-          <td style="color:#94a3b8;font-variant-numeric:tabular-nums;">${i + 1}</td>
+          <td style="color:#94a3b8;font-variant-numeric:tabular-nums;">${skip + i + 1}</td>
           <td style="font-size:12px;color:#64748d;">${fmtDate(o.received_at)}</td>
           <td>${o.store_name || o.store_id}</td>
           <td>${o.consumer_name || '—'}</td>
@@ -919,34 +979,14 @@ async function loadData() {
           </td>
         </tr>`).join('');
     }
-
-    const storeMap = {};
-    orders.forEach(o => {
-      const k = o.store_name || o.store_id;
-      if (!storeMap[k]) storeMap[k] = { count: 0, amount: 0 };
-      storeMap[k].count++;
-      storeMap[k].amount += o.amount;
-    });
-    const grid = document.getElementById('storesGrid');
-    if (Object.keys(storeMap).length === 0) {
-      grid.innerHTML = '<div style="padding:16px;color:#64748d;font-size:13px;">尚無資料</div>';
-    } else {
-      grid.innerHTML = Object.entries(storeMap)
-        .sort((a,b) => b[1].count - a[1].count)
-        .map(([name, d]) => `
-          <div class="store-card">
-            <div class="store-name" title="${name}">${name}</div>
-            <div class="store-count">${d.count}</div>
-            <div class="store-amount">NT$ ${fmt(d.amount)}</div>
-          </div>`).join('');
-    }
-
+    updatePager();
   } catch(e) {
-    const sp = document.getElementById('sidebarStatus');
-    sp.className = 'status-pill offline';
-    document.getElementById('sidebarStatusText').textContent = 'API 離線';
+    document.getElementById('ordersBody').innerHTML = '<tr><td colspan="11" class="empty">載入失敗</td></tr>';
   }
 }
+
+// ── 通用載入（重新整理按鈕用）──
+function loadData() { loadStats(); loadOrders(); }
 
 async function refreshTrashBadge() {
   try {
@@ -957,9 +997,10 @@ async function refreshTrashBadge() {
   } catch(e) {}
 }
 
-loadData();
+loadStats();
+loadOrders();
 refreshTrashBadge();
-setInterval(loadData, 30000);
+setInterval(loadStats, 30000);
 setInterval(refreshTrashBadge, 60000);
 
 // ── Sidebar mobile toggle ──
