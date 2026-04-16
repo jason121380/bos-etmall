@@ -997,6 +997,9 @@ async function refreshTrashBadge() {
   } catch(e) {}
 }
 
+// ── 初始化：日期預設今天（台北時區）──
+document.getElementById('orderDateFilter').value = taipeiYMD(new Date());
+
 loadStats();
 loadOrders();
 refreshTrashBadge();
