@@ -35,7 +35,14 @@ def _to_taipei(dt):
     return dt.astimezone(TAIPEI_TZ)
 
 
-def get_field_value(order, field: str) -> str:
+def _mask_phone(phone: str) -> str:
+    """0912345678 → 0912***678"""
+    if not phone or len(phone) < 7:
+        return phone or ""
+    return phone[:4] + "***" + phone[-3:]
+
+
+def get_field_value(order, field: str, mask: bool = True) -> str:
     if field == "amount":
         return f"NT$ {order.amount:,.0f}"
     if field == "order_time" and order.order_time:
@@ -44,6 +51,8 @@ def get_field_value(order, field: str) -> str:
         return _to_taipei(order.received_at).strftime("%Y-%m-%d %H:%M")
     if field == "store_name":
         return order.store_name or order.store_id or ""
+    if field == "consumer_phone" and mask:
+        return _mask_phone(order.consumer_phone)
     return str(getattr(order, field, "") or "")
 
 
@@ -77,7 +86,7 @@ def build_csv_base64(orders: list, fields: list) -> str:
     writer = csv.writer(buf)
     writer.writerow([FIELD_LABELS.get(f, f) for f in fields])
     for o in orders:
-        writer.writerow([get_field_value(o, f) for f in fields])
+        writer.writerow([get_field_value(o, f, mask=False) for f in fields])
     # utf-8-sig adds BOM automatically for Excel compatibility
     content = buf.getvalue().encode("utf-8-sig")
     return base64.b64encode(content).decode("ascii")

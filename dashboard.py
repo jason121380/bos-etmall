@@ -645,6 +645,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
 <script>
 const fmt = n => new Intl.NumberFormat('zh-TW').format(n);
+// 手機遮碼：0912345678 → 0912***678
+const maskPhone = p => p && p.length >= 7 ? p.slice(0,4) + '***' + p.slice(-3) : p || '—';
 // 後端回傳的 naive datetime 視為 UTC，統一轉台北時區
 const parseDate = s => {
   if (!s) return null;
@@ -776,7 +778,7 @@ async function loadTrash() {
           <td style="font-size:12px;color:#64748d;">${fmtDate(o.received_at)}</td>
           <td>${o.store_name || o.store_id}</td>
           <td>${o.consumer_name || '—'}</td>
-          <td>${o.consumer_phone}</td>
+          <td>${maskPhone(o.consumer_phone)}</td>
           <td class="amount">NT$ ${fmt(o.amount)}</td>
           <td><span class="badge badge-neutral">${o.order_status}</span></td>
           <td><span class="order-id">${o.order_id}</span></td>
@@ -959,7 +961,7 @@ async function loadOrders() {
           <td style="font-size:12px;color:#64748d;">${fmtDate(o.received_at)}</td>
           <td>${o.store_name || o.store_id}</td>
           <td>${o.consumer_name || '—'}</td>
-          <td>${o.consumer_phone}</td>
+          <td>${maskPhone(o.consumer_phone)}</td>
           <td class="amount">NT$ ${fmt(o.amount)}</td>
           <td><span class="badge badge-success">${o.order_status}</span></td>
           <td style="font-size:12px;color:#64748d;">${fmtDate(o.order_time)}</td>
@@ -996,6 +998,9 @@ async function refreshTrashBadge() {
     else { badge.style.display = 'none'; }
   } catch(e) {}
 }
+
+// ── 初始化：日期預設今天（台北時區）──
+document.getElementById('orderDateFilter').value = taipeiYMD(new Date());
 
 loadStats();
 loadOrders();
