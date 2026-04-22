@@ -813,17 +813,19 @@ def test_email(db: Session = Depends(get_db)):
         .limit(5)
         .all()
     )
-    rows = "".join(
-        f"<tr><td>{o.order_id}</td><td>{o.store_name or o.store_id}</td>"
-        f"<td>{o.consumer_phone}</td><td>NT$ {o.amount:,.0f}</td></tr>"
-        for o in orders
-    )
-    html = f"""<h2>BOS-ETMALL Email 測試信</h2>
-    <p>這是系統測試信，最新 {len(orders)} 筆訂單：</p>
-    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
-    <tr><th>訂單編號</th><th>店家</th><th>手機</th><th>金額</th></tr>
-    {rows}
-    </table>"""
+    html = f"""
+    <html><body style="font-family:'Helvetica Neue',Arial,'PingFang TC','Microsoft JhengHei',sans-serif;color:#1a1a1a;line-height:1.8;font-size:14px;max-width:640px;margin:0 auto;padding:24px;">
+      <p>敬啟者 您好，</p>
+      <p>此為 BOS-ETMALL 系統發送之測試信，用於確認郵件通道運作正常，
+      目前系統最新訂單筆數為 <strong>{len(orders)}</strong> 筆。</p>
+      <p>若您順利收到本封信件，代表 Email 設定已完成，毋需進行其他操作。</p>
+      <p>順頌 商祺</p>
+      <br>
+      <p style="color:#273951;margin:0;">名留集團 ML Group</p>
+      <hr style="border:none;border-top:1px solid #e5edf5;margin:20px 0 12px;">
+      <p style="color:#94a3b8;font-size:12px;margin:0;">此郵件由 BOS-ETMALL 系統自動發送，請勿直接回覆本信件。</p>
+    </body></html>
+    """
 
     resp = req.post(
         "https://api.zeabur.com/api/v1/zsend/emails",
