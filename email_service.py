@@ -57,26 +57,17 @@ def get_field_value(order, field: str, mask: bool = True) -> str:
 
 
 def build_email_html(orders: list, report_date: date, fields: list = None) -> str:
-    if not fields:
-        fields = DEFAULT_FIELDS
-
-    headers = "".join(f"<th>{FIELD_LABELS.get(f, f)}</th>" for f in fields)
-    rows = ""
-    for o in orders:
-        cells = "".join(f"<td>{get_field_value(o, f)}</td>" for f in fields)
-        rows += f"<tr>{cells}</tr>"
-
     return f"""
-    <html><body style="font-family:sans-serif;">
-    <h2 style="color:#061b31;">{report_date.strftime('%Y/%m/%d')}，每日點數儲值名單</h2>
-    <p style="color:#64748d;">共 <strong>{len(orders)}</strong> 筆</p>
-    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;margin-top:12px;">
-        <thead style="background:#533afd;color:white;">
-            <tr>{headers}</tr>
-        </thead>
-        <tbody>{rows}</tbody>
-    </table>
-    <br><p style="color:#94a3b8;font-size:12px;">此郵件由 BOS-ETMALL 系統自動發送</p>
+    <html><body style="font-family:'Helvetica Neue',Arial,'PingFang TC','Microsoft JhengHei',sans-serif;color:#1a1a1a;line-height:1.8;font-size:14px;max-width:640px;margin:0 auto;padding:24px;">
+      <p>敬啟者 您好，</p>
+      <p>茲附上 <strong>{report_date.strftime('%Y/%m/%d')}</strong> 點數儲值名單，共計 <strong>{len(orders)}</strong> 筆，
+      詳細內容請參照附件檔案，惠請查收。</p>
+      <p>如有任何疑問，敬請隨時來信聯繫，謝謝您的協助。</p>
+      <p>順頌 商祺</p>
+      <br>
+      <p style="color:#273951;margin:0;">名留集團 ML Group</p>
+      <hr style="border:none;border-top:1px solid #e5edf5;margin:20px 0 12px;">
+      <p style="color:#94a3b8;font-size:12px;margin:0;">此郵件由 BOS-ETMALL 系統自動發送，請勿直接回覆本信件。</p>
     </body></html>
     """
 
