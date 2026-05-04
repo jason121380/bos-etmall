@@ -20,7 +20,7 @@ import schemas
 from config import settings
 from dashboard import DASHBOARD_HTML
 from database import Base, engine, get_db
-from email_service import send_daily_report
+from email_service import dedupe_same_day_store_phone, send_daily_report
 from sheets import mark_order_deleted_in_sheet, restore_order_in_sheet, sync_order_to_sheet
 
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +32,14 @@ VALID_STATUSES = {"completed", "paid", "confirmed", "success", "done"}
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 scheduler = AsyncIOScheduler(timezone="Asia/Taipei")
+
+
+def _dedupe_enabled(db: Session) -> bool:
+    """讀取 settings.email_dedupe_same_day_phone，預設為 True。"""
+    row = db.query(models.Setting).filter(models.Setting.key == "email_dedupe_same_day_phone").first()
+    if not row or row.value is None:
+        return True
+    return str(row.value).strip().lower() != "false"
 
 
 def taipei_day_to_utc_range(d: date) -> tuple:
@@ -71,20 +79,26 @@ def run_daily_email():
         fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
         fields = fields_row.value.split(",") if fields_row and fields_row.value else None
 
-        recip = settings.get_recipients()
-        send_daily_report(new_orders, yesterday, fields)
+        report_orders = dedupe_same_day_store_phone(new_orders) if _dedupe_enabled(db) else new_orders
 
+        recip = settings.get_recipients()
+        send_daily_report(report_orders, yesterday, fields)
+
+        # 已被決策（不論寄出或被去重排除）一律標記為 emailed，避免明天再被撈到
         for o in new_orders:
             o.emailed = True
         db.add(models.EmailLog(
             trigger="schedule",
             date_range=str(yesterday),
-            order_count=len(new_orders),
+            order_count=len(report_orders),
             recipients=",".join(recip),
             status="ok",
         ))
         db.commit()
-        logger.info(f"Daily email done: {len(new_orders)} orders")
+        logger.info(
+            f"Daily email done: {len(report_orders)}/{len(new_orders)} orders "
+            f"(dedupe excluded {len(new_orders) - len(report_orders)})"
+        )
     except Exception as e:
         logger.error(f"Daily email job failed: {e}")
         try:
@@ -678,6 +692,9 @@ def send_today_report(db: Session = Depends(get_db)):
     fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
     fields = fields_row.value.split(",") if fields_row and fields_row.value else None
 
+    if _dedupe_enabled(db):
+        orders = dedupe_same_day_store_phone(orders)
+
     recipients = settings.get_recipients()
     send_daily_report(orders, today, fields)
     db.add(models.EmailLog(
@@ -731,6 +748,9 @@ def send_date_report(start_date: str, end_date: str, db: Session = Depends(get_d
 
     fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
     fields = fields_row.value.split(",") if fields_row and fields_row.value else None
+
+    if _dedupe_enabled(db):
+        orders = dedupe_same_day_store_phone(orders)
 
     label = start_date if start_date == end_date else f"{start_date} ~ {end_date}"
     from email_service import build_email_html, build_csv_base64
