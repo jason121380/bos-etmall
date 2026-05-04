@@ -20,7 +20,8 @@ import schemas
 from config import settings
 from dashboard import DASHBOARD_HTML
 from database import Base, engine, get_db
-from email_service import dedupe_same_day_store_phone, send_daily_report
+from email_service import build_csv_base64, dedupe_same_day_store_phone, send_daily_report
+from email_service import DEFAULT_FIELDS as EMAIL_DEFAULT_FIELDS
 from sheets import mark_order_deleted_in_sheet, restore_order_in_sheet, sync_order_to_sheet
 
 logging.basicConfig(level=logging.INFO)
@@ -847,10 +848,32 @@ def test_email(db: Session = Depends(get_db)):
     </body></html>
     """
 
+    fields_row = db.query(models.Setting).filter(models.Setting.key == "email_fields").first()
+    fields = (
+        [f.strip() for f in fields_row.value.split(",") if f.strip()]
+        if fields_row and fields_row.value
+        else list(EMAIL_DEFAULT_FIELDS)
+    )
+
+    today_taipei = datetime.now(TAIPEI_TZ).strftime("%Y%m%d")
+    csv_b64 = build_csv_base64(orders, fields)
+    filename = f"名留集團 ML Group_點數儲值名單_測試_{today_taipei}.csv"
+
+    payload = {
+        "from": f"名留集團 ML Group <{settings.EMAIL_FROM}>",
+        "to": recipients,
+        "subject": "名留集團 ML Group — Email 測試信",
+        "html": html,
+    }
+    if orders:
+        payload["attachments"] = [
+            {"filename": filename, "content": csv_b64, "content_type": "text/csv"}
+        ]
+
     resp = req.post(
         "https://api.zeabur.com/api/v1/zsend/emails",
         headers={"Authorization": f"Bearer {settings.ZEABUR_EMAIL_API_KEY}", "Content-Type": "application/json"},
-        json={"from": f"名留集團 ML Group <{settings.EMAIL_FROM}>", "to": recipients, "subject": "名留集團 ML Group — Email 測試信", "html": html},
+        json=payload,
         timeout=15,
     )
     result = resp.json()
