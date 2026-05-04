@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 from config import settings
 import logging
 
+MIN_DT = datetime.min.replace(tzinfo=timezone.utc)
+
 logger = logging.getLogger(__name__)
 
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
@@ -54,6 +56,29 @@ def get_field_value(order, field: str, mask: bool = True) -> str:
     if field == "consumer_phone" and mask:
         return _mask_phone(order.consumer_phone)
     return str(getattr(order, field, "") or "")
+
+
+def dedupe_same_day_store_phone(orders: list) -> list:
+    """同台北日、同 store_id、同 consumer_phone 的訂單只保留最早一筆。
+
+    沒有 consumer_phone 的訂單一律保留（不視為重複）。回傳結果維持原本傳入的排序。
+    """
+    by_asc = sorted(orders, key=lambda o: _to_taipei(o.received_at) or MIN_DT)
+    seen = set()
+    keep_ids = set()
+    for o in by_asc:
+        phone = (o.consumer_phone or "").strip()
+        if not phone:
+            keep_ids.add(id(o))
+            continue
+        ref_dt = _to_taipei(o.received_at)
+        day = ref_dt.date() if ref_dt else None
+        key = (day, o.store_id or "", phone)
+        if key in seen:
+            continue
+        seen.add(key)
+        keep_ids.add(id(o))
+    return [o for o in orders if id(o) in keep_ids]
 
 
 def build_email_html(orders: list, report_date: date, fields: list = None) -> str:

@@ -528,6 +528,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>
       </div>
 
+      <div style="margin-bottom:20px;">
+        <label style="font-size:12px;font-weight:500;color:#273951;display:block;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">寄送選項</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#273951;cursor:pointer;padding:10px 12px;border:1px solid #e5edf5;border-radius:4px;">
+          <input type="checkbox" id="dedupePhoneToggle" style="accent-color:#533afd;" checked>
+          <span>排除當日當店重複手機號訂單</span>
+          <span style="color:#94a3b8;font-size:11px;margin-left:auto;">同日 + 同店 + 同手機，僅保留最早一筆</span>
+        </label>
+      </div>
+
       <div style="margin-bottom:16px;">
         <label style="font-size:12px;font-weight:500;color:#273951;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">收件人（每行一個 Email）</label>
         <textarea id="recipientsInput"
@@ -696,6 +705,10 @@ async function loadSettings() {
     document.querySelectorAll('#fieldCheckboxes input[type=checkbox]').forEach(cb => {
       cb.checked = fields.includes(cb.value);
     });
+
+    // 預設打勾：未設定時視為 true
+    const dedupe = (s.email_dedupe_same_day_phone ?? 'true');
+    document.getElementById('dedupePhoneToggle').checked = (dedupe !== 'false');
   } catch(e) {}
 }
 
@@ -708,11 +721,17 @@ async function saveSettings() {
 
   if (!fields) { alert('請至少選擇一個欄位'); return; }
 
+  const dedupe = document.getElementById('dedupePhoneToggle').checked ? 'true' : 'false';
+
   try {
     await fetch('/admin/settings', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ email_recipients: recipients, email_fields: fields })
+      body: JSON.stringify({
+        email_recipients: recipients,
+        email_fields: fields,
+        email_dedupe_same_day_phone: dedupe,
+      })
     });
     const msg = document.getElementById('settingsMsg');
     msg.style.display = 'inline';
